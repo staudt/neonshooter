@@ -1,0 +1,51 @@
+// NEON entity definitions. Keys are read by src/world/level.ts (and gameplay systems).
+// Units: map units (32 = 1 m), Z-up. "angle" is yaw in degrees, 0 = +X.
+
+@SolidClass = worldspawn : "World" []
+
+@BaseClass = Targetname [ targetname(target_source) : "Name" ]
+@BaseClass = Target [ target(target_destination) : "Target" ]
+@BaseClass = Angle [ angle(integer) : "Yaw (degrees, 0 = +X)" : 0 ]
+@BaseClass = Encounter [
+    encounter(string) : "Encounter name (targetname of a trigger_encounter)"
+    wave(integer) : "Wave within the encounter (0 = first)" : 0
+]
+
+// --- Player / flow -----------------------------------------------------------
+
+@PointClass base(Angle) size(-16 -16 0, 16 16 56) color(0 255 0) = info_player_start : "Player start" []
+
+@PointClass base(Angle, Targetname) size(-16 -16 0, 16 16 56) color(0 200 255) =
+    info_checkpoint : "Respawn point. Activated by a trigger_checkpoint that targets it." []
+
+@SolidClass base(Target) = trigger_checkpoint : "Activates the info_checkpoint it targets when the player enters" []
+
+@SolidClass base(Targetname, Target) = trigger_encounter :
+    "Starts an encounter when entered: spawns enemies whose 'encounter' key is this targetname. Doors it targets stay locked until the encounter is cleared." []
+
+@SolidClass base(Target) = trigger_stage_end : "Ends the stage when entered (all encounters must be cleared)" []
+
+// --- Enemies ----------------------------------------------------------------
+
+@PointClass base(Angle, Encounter) size(-16 -16 0, 16 16 64) color(255 60 60) = enemy_grunt : "Grunt robot (ground, projectile bursts)" []
+
+@PointClass base(Angle, Encounter) size(-12 -12 -12, 12 12 12) color(255 140 0) = enemy_drone : "Drone (flying, flanks)" []
+
+@PointClass base(Angle) size(-12 -12 0, 12 12 56) color(255 200 0) = target_dummy : "Shooting-range dummy (respawns)" [
+    health(integer) : "Health" : 100
+]
+
+// --- World --------------------------------------------------------------------
+
+@SolidClass = func_detail : "Detail brushes (treated as world)" []
+
+@SolidClass base(Targetname) = func_door : "Sliding door / mover" [
+    move(string) : "Open offset x y z (map units)" : "0 0 128"
+    speed(integer) : "Speed (units per second)" : 256
+]
+
+@PointClass size(-8 -8 -8, 8 8 8) color(255 255 180) = light_point : "Point light" [
+    _color(color1) : "Color (0-1)" : "1 1 1"
+    intensity(float) : "Intensity" : 20
+    range(float) : "Range (m)" : 12
+]

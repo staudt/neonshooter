@@ -1,0 +1,6 @@
+node_modules/
+dist/
+test-results/
+.claude/.dirty
+.claude/.verify-attempts
+.claude/settings.local.json

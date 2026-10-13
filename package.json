@@ -1,0 +1,37 @@
+{
+  "name": "neon",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "smoke": "node scripts/smoke.mjs",
+    "verify": "npm run -s typecheck && npm run -s test && npm run -s smoke",
+    "format": "prettier --write .",
+    "textures": "node scripts/gen-textures.ts",
+    "tb:install": "scripts/install-trenchbroom.sh",
+    "gen:course": "node scripts/gen-test-course.ts",
+    "gen:arena": "node scripts/gen-arena.ts"
+  },
+  "type": "module",
+  "private": "true",
+  "dependencies": {
+    "lil-gui": "^0.21.0",
+    "n8ao": "^2.0.1",
+    "postprocessing": "^6.39.5",
+    "recast-navigation": "^0.43.1",
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.16"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/three": "^0.186.0",
+    "playwright": "^1.64.0",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
