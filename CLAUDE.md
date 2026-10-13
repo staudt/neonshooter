@@ -60,7 +60,9 @@ effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section
   arena combat), runs the scripts in `src/test/smokeScript.ts`; fails on errors or any false
   `checks` in main's smoke report. Screenshots: `test-results/smoke-fp.png` (ADS + firing), `smoke-reload.png` (mid reload) and
   `test-results/smoke.png` (fixed overview). Look at them after visual changes.
-- `npm run build`
+- `npm run build` (`BASE_PATH=/neonshooter/` for the Pages layout)
+- Deploy: every push to `main` runs `.github/workflows/pages.yml` (typecheck + tests + build) and publishes to
+  https://staudt.github.io/neonshooter/ — default map there is `arena_test`; start screen links switch maps.
 - `npm run textures` — regenerate TrenchBroom PNGs from `src/world/palette.ts`; `npm run gen:course` — regenerate test map
 - `npm run tb:install` — link the TrenchBroom game config. Level authoring guide: [docs/LEVELS.md](docs/LEVELS.md)
 

@@ -49,6 +49,8 @@ function neonMaps(): Plugin {
 }
 
 export default defineConfig({
+  // GitHub Pages serves the project under /<repo>/ (set by the deploy workflow).
+  base: process.env.BASE_PATH ?? '/',
   plugins: [neonMaps()],
   server: { port: 5173 },
   test: {

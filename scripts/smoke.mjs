@@ -11,7 +11,7 @@ const dir = process.env.SMOKE_DIR ?? 'test-results';
 
 /** Each run: map (null = default test course), mid-run screenshots [script time, name], overview name. */
 const RUNS = [
-  { map: null, shots: [[2.75, 'smoke-fp'], [3.55, 'smoke-reload']], overview: 'smoke' },
+  { map: 'test_course', shots: [[2.75, 'smoke-fp'], [3.55, 'smoke-reload']], overview: 'smoke' },
   { map: 'arena_test', shots: [[4.6, 'smoke-arena-fp']], overview: 'smoke-arena' },
 ];
 const only = process.env.SMOKE_MAP;

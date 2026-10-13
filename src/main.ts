@@ -34,7 +34,7 @@ const DEG = Math.PI / 180;
 
 const params = new URLSearchParams(location.search);
 const smoke = params.get('test') === 'smoke';
-const mapName = params.get('map') ?? 'test_course';
+const mapName = params.get('map') ?? 'arena_test';
 
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -60,6 +60,11 @@ scene.environmentIntensity = 0.2;
 const camera = new PerspectiveCamera(SETTINGS.fov, innerWidth / innerHeight, 0.05, 500);
 
 const overlay = document.getElementById('overlay')!;
+// Map links on the start screen navigate instead of grabbing the mouse; highlight the current map.
+overlay.querySelectorAll<HTMLAnchorElement>('a[data-map]').forEach((a) => {
+  a.classList.toggle('current', a.dataset.map === mapName);
+  a.addEventListener('click', (e) => e.stopPropagation());
+});
 let input: InputSource;
 if (smoke) {
   overlay.classList.add('hidden');
@@ -306,7 +311,8 @@ onMapChanged(async (name) => {
 });
 
 mountStats();
-if (import.meta.env.DEV) void mountTuningPanel();
+// Available in published builds too: players can set sensitivity/FOV and testers can tweak feel.
+void mountTuningPanel();
 loop.start();
 
 // ---------------------------------------------------------------------------
