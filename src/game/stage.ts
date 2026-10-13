@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import type { Enemies } from '../ai/enemies';
+import { Enemies } from '../ai/enemies';
 import { brushContains, type BuiltBrush } from '../world/brushGeometry';
 import type { Doors } from '../world/doors';
 import type { LevelData, LevelEntity } from '../world/level';
@@ -70,7 +70,7 @@ export class Stage {
       }
     }
     for (const e of data.entities) {
-      if (!(e.classname === 'enemy_grunt' || e.classname === 'enemy_drone')) continue;
+      if (!Enemies.isEnemy(e)) continue;
       const enc = byName.get(e.props.encounter ?? '');
       if (!enc) continue;
       const w = Number(e.props.wave ?? 0);

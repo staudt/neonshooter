@@ -46,6 +46,12 @@ effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section
   graphic gore; look slice (`maps/station_slice.map`) first. Plan: docs/PLAN.md "Look" / "Enemies".
 - 2026-10-13: ADS sensitivity default = flat 0.9 (≈10% slower), FOV-relative scaling **off** by default (it stacked
   to a ~37% cut on the AR). Tone mapping ACES (AgX bleached hell reds pink).
+- 2026-10-13: **Melee** (E): AR rifle-butt bash, pistol = pistol + off-hand knife (faster, stronger); lunge toward
+  targets within 4 m; cancels a reload that hasn't added ammo. **Shield** (hold Q; 1/2 switch weapons, no Q cycling): energy riot shield blocks
+  projectiles in a ±65° frontal cone; up = no fire/ADS/reload (raising cancels a reload), 70% move speed; down =
+  0.35 s before firing + slower ADS-in for 1 s; own HP (150), regen after 2 s, breaks → 4 s cooldown. Flyers 2×
+  (`DRONE.scale` 4.8); enemy fire slower (drone 15, grunt 23 m/s). **Graphics quality**: auto tiers (high/medium/
+  low = no post) + render scale; starts low on software renderers, steps down when < 45 fps, remembered.
 
 ## Conventions
 
@@ -106,9 +112,11 @@ effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section
 - [x] 3. Movement (capsule collision, state machine, camera feel) + headless sim tests — needs a hands-on tuning pass
 - [x] 4. Weapons (AR + pistol, hitscan, recoil, ADS, reload, FX, placeholder audio) — needs a hands-on feel pass
 - [x] 5. Enemies & loop (navmesh, Grunt + Drone, projectiles, health regen, checkpoints, encounters) — needs a combat feel pass
-- [ ] 6. Look pass / art pivot (post stack, materials, backdrop, signs, corruption shader, flying demon, fireballs)
-- [ ] 6b. Demons (rigged-enemy pipeline, caster, Possessed rusher, Hound, graphic gore)
-- [ ] 7. First stage (5–8 min, 3–4 encounters, stage-clear screen)
+- [x] 6. Look pass / art pivot (post stack, materials, backdrop, signs, corruption shader, flying demon, fireballs,
+  quality tiers)
+- [ ] 6b. Demons — done: Possessed + Hound AI on placeholder primitive bodies, graphic gore, demon audio. Left: rigged
+  CC0 models (needs the Quaternius downloads), fireball caster replacing the robot grunt
+- [x] 7. First stage (`maps/stage1.map`, 4 encounters, stage-clear screen) — needs a playtest/pacing pass
 
 ## Map pipeline (src/world/)
 
@@ -146,6 +154,11 @@ Maps are served by the `neon-maps` Vite plugin (vite.config.ts), which also emit
 - `viewmodel.ts`: separate scene + camera rendered after the world (depth cleared); pose blend hip→ADS (sight line
   aligned to screen center via `sightHeight`/`adsDistance`), sprint/tac/reload/swap poses, sway, bob, kick springs,
   muzzle flash; `cameraShake` = visual-only shake. `models.ts` = procedural placeholder guns (anchors: muzzle, mag).
+- Melee + shield: `WeaponSystem` phase `'melee'` (`melee` getter: bash/knife timing from `MELEE` tunables;
+  events `meleeStarted`/`meleeStrike`) and shield state (`shieldRaise`, `shieldHp`, `absorb()`, `SHIELD` tunables).
+  `Combat.stepMelee` = lunge + fan-of-rays hit; `Combat.tryBlock` (called by main for each projectile that reaches
+  the player) = direction test + absorb + FX. Viewmodel: `BASH_POSE`, knife keyframes (`buildKnife`), energy shield
+  (`buildShield`, hex ShaderMaterial). Tests: `tests/melee-shield.test.ts`.
 - `combat.ts`: glue — preStep (sprint block, ADS move speed) → step (fire → `traceBullet` → damage/hitmarker/FX/sfx;
   movement sounds) → render (viewmodel, tracers, impacts, HUD, ADS FOV + FOV-relative sensitivity).
 - `hitscan.ts`: `Hittable` interface (enemies implement it), `traceBullet` (world BVH + targets; world surface via
@@ -191,6 +204,11 @@ Maps are served by the `neon-maps` Vite plugin (vite.config.ts), which also emit
 - `world/backdrop.ts`: sky dome (gradient, clouds, burning ring around the spire), ~900 instanced towers (window
   grid shader, neon edges, haze), rails, spire cones, lower-city ground, billboards (`adTexture`), traffic +
   blink lights (GPU-animated points). Deterministic PRNG. `backdropOptionsFor(worldProps, bounds)`.
+- `render/quality.ts`: tiers 3 high / 2 medium (no AO) / 1 low (no composer: `RenderPipeline.renderDirect`, renderer
+  ACES, fbm 1 octave via `SHADER_DETAIL` + `applyShaderDetail`) + render scale. `SETTINGS.quality` 0 = auto
+  (`QualityGovernor`: start low on SwiftShader/llvmpipe, step down while < 45 fps, saved in localStorage
+  `neon.autoQuality`); `?quality=1..3` forces. Smoke/shots always high. Every ShaderMaterial must end with the
+  `tonemapping_fragment` + `colorspace_fragment` includes so it's correct in the direct path too.
 - `world/signs.ts`: `info_sign` → CanvasTexture planes (skipped headless). `fx/embers.ts`: camera-wrapped GPU embers.
 - `fx/corruption.ts`: `corruptionMaterial()` — the demon skin (object-space veins, rim, pulse, charred skin);
   per instance (hit flash writes `emissive`); `updateCorruptionUniforms(time)` per frame. Tunables "look: corruption".
@@ -198,10 +216,31 @@ Maps are served by the `neon-maps` Vite plugin (vite.config.ts), which also emit
   ribs, tentacles via `animateFlyer`); `buildBolt()` = HDR additive fireball (flickered in `projectiles.ts`). The
   grunt is still the robot placeholder until the rigged-enemy pipeline (milestone 6b).
 
+## Demons, gore, stage 1 (src/ai/possessed.ts, hound.ts, demonModels.ts, src/fx/gore.ts, scripts/gen-stage1.ts)
+
+- `Possessed` (melee rusher, "enemy: possessed"): navmesh chase at 6.2 m/s (outrun by sprinting) → wind-up
+  (arms back + shriek = telegraph) → lunge + swipe (hits only if still in range/cone) → recover.
+- `Hound` ("enemy: hound"): 9.5 m/s chase → crouch (snarl) **commits the pounce target** → ballistic leap (leaves
+  the crowd, re-joins on landing via `agent.teleport`) → contact damage + knockback once; bites up close.
+- Melee attacks are `EnemyEvents.attacks` (`MeleeAttack`), resolved in main through `Combat.tryBlock` (the
+  shield stops claws/bites from the front, absorbs most knockback). `EnemyStepResult` events carry `kind` (audio).
+- `demonModels.ts`: primitive bodies on joint hierarchies + `animatePossessed` / `animateHound` (gait, attack,
+  corrupted twitch). Same `hit`/`mats` shape as the robots: a rigged glTF can replace them later.
+  `HitVolumes.extra` = extra body spheres (long bodies).
+- `Enemy.bleeds` (all but the robot grunt) → `fx/gore.ts` `Gore`: droplets + mist (instanced), splatter decals by a
+  raycast behind each hit, pools on death, gib trails/landing splats via `Enemies.updateDebris(dt, fx)`. All ring
+  buffers ("gore" tunables). Demon audio: `voice()` formant synth in `audio/synth.ts` (growl/screech/shriek/snarl/death).
+- Readability rule (playtested in stills): world corruption (`hellcrack`) is dim crimson; demon veins burn orange.
+- Navmesh climb is 0.6 m (0.45 failed every staircase: a 0.2 m cell straddles two steps).
+- `scripts/kit.ts` = shared generator helpers; `gen-stage1.ts` = tunnel → Platform 2 (enc_platform) → corridor
+  (cp) → stairs → Market (enc_market) → ramp (cp) → Skybridge 7 (enc_bridge) → plaza (cp, enc_plaza) → breach.
+  `tests/stage1.test.ts` checks encounters/doors, checkpoints behind gated doors, spawns on navmesh, connectivity.
+
 ## Controls
 
 WASD move · Mouse look · Space jump/mantle · Shift sprint (again = tac sprint) · C / Ctrl crouch (while sprinting = slide;
-during slide = cancel) · LMB fire · RMB ADS · R reload · Q swap · 1/2 weapons · F interact · ` tuning panel · V noclip (dev)
+during slide = cancel) · LMB fire · RMB ADS · R reload · E melee · Q shield · 1/2 weapons · F interact ·
+` tuning panel · V noclip (dev)
 
 ## Status notes
 

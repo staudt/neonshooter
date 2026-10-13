@@ -42,11 +42,12 @@ export const PALETTE = {
   grate: { color: 0x3b3d40, roughness: 0.5, metalness: 0.8, style: 'grate' },
   hazard: { color: 0xb8921e, roughness: 0.65, style: 'hazard' },
   train: { color: 0x8d9298, roughness: 0.4, metalness: 0.55, style: 'panel' },
+  // dim crimson: the world's corruption must never out-glow the demons (they burn orange)
   hellcrack: {
     color: 0x1a0d0b,
-    roughness: 0.55,
-    emissive: 0xff2a0e,
-    emissiveIntensity: 3.5,
+    roughness: 0.6,
+    emissive: 0xb0160a,
+    emissiveIntensity: 2,
     style: 'hellcrack',
   },
   window_lit: { color: 0xa9c4d6, roughness: 1, emissive: 0x9fc2dc, emissiveIntensity: 0.9 },

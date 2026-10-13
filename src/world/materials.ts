@@ -67,8 +67,17 @@ const STYLE_IDS: Record<SurfaceStyle, number> = {
   hellcrack: 9,
 };
 
+/**
+ * Procedural shader detail (quality tier): fbm octaves. Read when a program compiles and part of
+ * its cache key; render/quality.ts changes it and flags materials for recompilation.
+ */
+export const SHADER_DETAIL = { octaves: 4 };
+
 /** Shared GLSL: hashes, value noise, fbm, 2D cells. Also used by corruption/backdrop shaders. */
 export const NOISE_GLSL = /* glsl */ `
+#ifndef FBM_OCTAVES
+#define FBM_OCTAVES 4
+#endif
 float nHash13(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
 float nHash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec2 nHash22(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
@@ -80,9 +89,9 @@ float vnoise(vec3 p) {
     f.z);
 }
 float fbm(vec3 p) {
-  float a = 0.5, s = 0.0;
-  for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + 17.1; a *= 0.5; }
-  return s / 0.9375;
+  float a = 0.5, s = 0.0, w = 0.0;
+  for (int i = 0; i < FBM_OCTAVES; i++) { s += a * vnoise(p); w += a; p = p * 2.03 + 17.1; a *= 0.5; }
+  return s / w;
 }
 // 2D cells: x = distance to nearest feature, y = F2 - F1 (0 on cell borders), z = cell id hash.
 vec3 cells2(vec2 p) {
@@ -234,7 +243,7 @@ const STYLE_GLSL = /* glsl */ `
   // Hell cracks: dark rock/flesh plates, glowing borders that pulse slowly.
   vec2 q = uv * 1.1 + vec2(fbm(p * 0.8), fbm(p * 0.8 + 5.0)) * 0.9;
   vec3 cl = cells2(q);
-  float crack = 1.0 - smoothstep(0.02, 0.12 + 0.08 * big, cl.y);
+  float crack = 1.0 - smoothstep(0.015, 0.06 + 0.05 * big, cl.y);
   float pulse = 1.0 + uCrackPulse * sin(uTime * 1.7 + cl.z * 6.28 + p.y * 0.8);
   alb = mix(alb * (0.6 + mid * 0.8), vec3(0.05, 0.01, 0.0), crack);
   emit = (crack * (0.6 + 0.4 * fbm(p * 3.0 + uTime * 0.1)) + smoothstep(0.7, 1.0, big) * 0.08) * uCrackGlow * pulse;
@@ -254,10 +263,10 @@ function create(entry: PaletteEntry): Material {
   });
   const style = entry.style ? STYLE_IDS[entry.style] : 0;
   if (!style) return m;
-  m.customProgramCacheKey = () => `surf${style}`;
+  m.customProgramCacheKey = () => `surf${style}o${SHADER_DETAIL.octaves}`;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
-    shader.defines = { ...shader.defines, SURF_STYLE: style };
+    shader.defines = { ...shader.defines, SURF_STYLE: style, FBM_OCTAVES: SHADER_DETAIL.octaves };
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',

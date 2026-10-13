@@ -5,20 +5,20 @@ import { approachAngle, Enemy, yawToward, type AIContext } from './enemy';
 import { animateFlyer, buildDrone, type DroneModel } from './models';
 
 export const DRONE = defineTunables('enemy: drone', {
-  /** Model + hit volume scale (bigger = easier to hit). 2.4 keeps the old drone's hit radius. */
-  scale: 2.4,
+  /** Model + hit volume scale (bigger = easier to hit). 4.8 ≈ 2.4 m across (playtest: bigger targets). */
+  scale: 4.8,
   health: 45,
   speed: 7,
   accel: 4,
-  orbitRadiusMin: 8,
-  orbitRadiusMax: 13,
+  orbitRadiusMin: 9,
+  orbitRadiusMax: 14,
   orbitSpeed: 0.35,
-  heightMin: 2.5,
-  heightMax: 5,
+  heightMin: 3.5,
+  heightMax: 6,
   chargeTime: 0.35,
   cooldownMin: 1.3,
   cooldownMax: 2.1,
-  boltSpeed: 18,
+  boltSpeed: 15,
   boltDamage: 8,
   spreadDeg: 1.8,
   lead: 0.6,
@@ -93,20 +93,20 @@ export class Drone extends Enemy {
       const ahead = raycast(ctx.colliders, pos, this.vel.clone().divideScalar(speed), 2.5);
       if (ahead) desired.addScaledVector(ahead.normal, (2.5 - ahead.distance) * 4);
     }
-    const clearance = 1.2 + 0.35 * DRONE.scale;
+    const clearance = 0.9 + 0.3 * DRONE.scale;
     const below = raycast(ctx.colliders, pos, new Vector3(0, -1, 0), clearance);
     if (below) desired.y += (clearance - below.distance) * 4;
     for (const a of ctx.allies) {
       if (a === this || !a.alive || a.kind !== 'drone') continue;
       const off = new Vector3().subVectors(pos, a.position);
       const l = off.length();
-      const sep = 1.5 + DRONE.scale;
+      const sep = 1.5 + 0.7 * DRONE.scale;
       if (l < sep && l > 1e-3) desired.addScaledVector(off, ((sep - l) / l) * 3);
     }
     this.vel.lerp(desired, Math.min(1, DRONE.accel * dt));
     pos.addScaledVector(this.vel, dt);
     // Keep out of walls (sphere-ish capsule around the body).
-    const r = 0.35 * DRONE.scale;
+    const r = 0.3 * DRONE.scale;
     const feet = pos.clone().setY(pos.y - r);
     depenetrate(ctx.colliders, feet, { radius: r, height: 2 * r });
     pos.set(feet.x, feet.y + r, feet.z);

@@ -16,6 +16,12 @@ const VANTAGES = [
   // player parked in the encounter trigger: wave 0 (flying demons) comes at the camera
   { map: 'station_slice', name: 'station-demons', pose: [0.5, 1.7, -20, -12, 12], enc: [0, 0.01, -19], wait: 34 },
   // portrait: camera tracks the nearest enemy from 3.2 m
+  { map: 'stage1', name: 'stage-market', pose: [-4, -4.3, -84, -8, -4] },
+  { map: 'stage1', name: 'stage-bridge', pose: [0, 1.7, -146, 0, 4] },
+  { map: 'stage1', name: 'stage-plaza', pose: [0, 1.7, -196, 0, 8] },
+  // portraits of the melee demons (player parked in the platform encounter trigger)
+  { map: 'stage1', name: 'possessed-portrait', pose: [0, 1.7, -198, 0, 0], enc: [0, 0.01, -198], track: 2.6, trackKind: 'possessed', wait: 34 },
+  { map: 'stage1', name: 'hound-portrait', pose: [0, 1.7, -198, 0, 0], enc: [0, 0.01, -198], track: 2.4, trackKind: 'hound', wait: 30 },
   { map: 'station_slice', name: 'demon-portrait', pose: [0, 1.7, -20, 0, 0], enc: [0, 0.01, -19], track: 3.2, wait: 30 },
 ];
 const only = process.env.SHOT;
@@ -39,7 +45,10 @@ try {
     if (tune) await page.addInitScript((t) => localStorage.setItem('neon.tuning', t), tune);
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(e.message));
-    const enc = (v.enc ? `&enc=${v.enc.join(',')}` : '') + (v.track ? `&track=${v.track}` : '');
+    const enc =
+      (v.enc ? `&enc=${v.enc.join(',')}` : '') +
+      (v.track ? `&track=${v.track}` : '') +
+      (v.trackKind ? `&trackKind=${v.trackKind}` : '');
     await page.goto(`${server.resolvedUrls.local[0]}?map=${v.map}&shot=${v.pose.join(',')}${enc}`);
     await page.addStyleTag({ content: 'body > :not(canvas) { display: none !important; }' });
     await page

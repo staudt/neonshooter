@@ -16,6 +16,7 @@ import {
   VignetteEffect,
 } from 'postprocessing';
 import {
+  ACESFilmicToneMapping,
   HalfFloatType,
   NoToneMapping,
   Vector2,
@@ -36,7 +37,7 @@ export const POST = defineTunables(
   {
     /** 0 = AgX, 1 = ACES filmic, 2 = Khronos neutral. ACES keeps hell reds red; AgX bleaches them pink. */
     toneMapper: 1,
-    exposure: 1.0,
+    exposure: 1.2,
     aoIntensity: 3.2,
     aoRadius: 2.2,
     bloom: 0.8,
@@ -95,6 +96,7 @@ export class RenderPipeline {
   ) {
     renderer.toneMapping = NoToneMapping; // the ToneMappingEffect does it
     this.composer = new EffectComposer(renderer, { frameBufferType: HalfFloatType });
+    this.scenes = { ...scenes };
     const { world, backdrop, viewmodel } = scenes;
     const camera = world.camera;
 
@@ -149,7 +151,12 @@ export class RenderPipeline {
     this.composer.addPass(new EffectPass(camera, new SMAAEffect({ preset: SMAAPreset.MEDIUM })));
   }
 
+  /** 3 = full post, 2 = no AO, 1 = no post (direct render; for machines without a usable GPU). */
+  tier: 1 | 2 | 3 = 3;
+  private readonly scenes: PipelineScenes;
+
   setBackdrop(scene: Scene, camera: PerspectiveCamera) {
+    this.scenes.backdrop = { scene, camera };
     this.backdropPass.mainScene = scene;
     this.backdropPass.mainCamera = camera;
   }
@@ -175,7 +182,31 @@ export class RenderPipeline {
     this.aberration.offset.set(ca, ca * 0.6);
     const mode = [ToneMappingMode.AGX, ToneMappingMode.ACES_FILMIC, ToneMappingMode.NEUTRAL][POST.toneMapper] ?? ToneMappingMode.ACES_FILMIC;
     if (this.tone.mode !== mode) this.tone.mode = mode;
+    if (this.tier === 1) {
+      this.renderDirect();
+      return;
+    }
+    this.renderer.toneMapping = NoToneMapping;
+    this.ao.enabled = this.tier === 3;
     this.vmPass.enabled = this.showViewmodel;
     this.composer.render(dt);
+  }
+
+  /** Low tier: no composer — backdrop, world, viewmodel straight to the canvas, renderer tone mapping. */
+  private renderDirect() {
+    const r = this.renderer;
+    const { backdrop, world, viewmodel } = this.scenes;
+    r.toneMapping = ACESFilmicToneMapping;
+    r.toneMappingExposure = POST.exposure;
+    r.setRenderTarget(null);
+    r.autoClear = false;
+    r.clear();
+    r.render(backdrop.scene, backdrop.camera);
+    r.clearDepth();
+    r.render(world.scene, world.camera);
+    if (this.showViewmodel) {
+      r.clearDepth();
+      r.render(viewmodel.scene, viewmodel.camera);
+    }
   }
 }

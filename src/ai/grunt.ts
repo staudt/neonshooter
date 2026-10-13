@@ -21,7 +21,7 @@ export const GRUNT = defineTunables('enemy: grunt', {
   burstInterval: 0.13,
   cooldownMin: 1.4,
   cooldownMax: 2.4,
-  boltSpeed: 26,
+  boltSpeed: 23,
   boltDamage: 12,
   spreadDeg: 1.4,
   /** Fraction of the player's velocity used to lead shots (1 = perfect lead). */

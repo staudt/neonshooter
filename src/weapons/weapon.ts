@@ -1,6 +1,6 @@
 import type { InputState } from '../core/input';
 import { Spring } from '../core/springs';
-import type { WeaponDef, WeaponStats } from './defs';
+import { MELEE, SHIELD, type WeaponDef, type WeaponStats } from './defs';
 
 /** What the weapon needs to know about the player each step. */
 export interface WeaponContext {
@@ -27,6 +27,15 @@ export interface WeaponEvents {
   magIn: boolean;
   chamber: boolean;
   swapStarted: boolean;
+  /** Melee began this step (combat resolves the lunge). */
+  meleeStarted: boolean;
+  /** The swing connects this step (combat traces the hit). */
+  meleeStrike: boolean;
+  shieldRaised: boolean;
+  shieldLowered: boolean;
+  /** Set by absorb(). */
+  shieldBlocked: boolean;
+  shieldBroken: boolean;
 }
 
 interface Slot {
@@ -35,7 +44,7 @@ interface Slot {
   reserve: number;
 }
 
-type Phase = 'ready' | 'reload' | 'swapOut' | 'swapIn';
+type Phase = 'ready' | 'reload' | 'swapOut' | 'swapIn' | 'melee';
 
 /** Aiming within this long after a sprint ended counts as "straight out of the sprint". */
 const ADS_SPRINT_WINDOW = 0.35;
@@ -92,6 +101,17 @@ export class WeaponSystem {
   private ammoAdded = false;
   private sprayShots = 0;
   private sinceShot = 999;
+  private meleeStruck = false;
+
+  // Shield: 0 = down, 1 = fully up.
+  shieldRaise = 0;
+  shieldHp = SHIELD.hp;
+  /** > 0 while broken (can't raise). */
+  shieldBrokenT = 0;
+  /** > 0 after lowering: can't fire yet. */
+  private shieldRecoverT = 0;
+  private sinceShieldDown = 999;
+  private sinceShieldHit = 999;
   private random: () => number;
 
   // Aim recoil (degrees). view = base + punch. `fold` is handed to the camera to absorb into base.
@@ -112,6 +132,12 @@ export class WeaponSystem {
     magIn: false,
     chamber: false,
     swapStarted: false,
+    meleeStarted: false,
+    meleeStrike: false,
+    shieldRaised: false,
+    shieldLowered: false,
+    shieldBlocked: false,
+    shieldBroken: false,
   };
 
   constructor(loadout: WeaponDef[], seed = 1) {
@@ -133,9 +159,56 @@ export class WeaponSystem {
     return this.slot.def.stats;
   }
 
-  /** True while the player is trying to use the gun: the controller should stop sprinting. */
+  /** True while the player is trying to use the gun or shield: the controller should stop sprinting. */
   wantsSprintBlocked(input: InputState) {
-    return input.down.has('fire') || input.down.has('ads');
+    return (
+      input.down.has('fire') ||
+      input.down.has('ads') ||
+      (input.down.has('shield') && this.shieldBrokenT <= 0)
+    );
+  }
+
+  /** Melee timing for the current weapon. */
+  get melee() {
+    const knife = this.def.melee === 'knife';
+    return {
+      kind: this.def.melee,
+      time: knife ? MELEE.knifeTime : MELEE.bashTime,
+      hitAt: knife ? MELEE.knifeHitAt : MELEE.bashHitAt,
+      damage: knife ? MELEE.knifeDamage : MELEE.bashDamage,
+      range: knife ? MELEE.knifeRange : MELEE.bashRange,
+    };
+  }
+
+  /** Shield is up enough to stop fire. */
+  get shieldBlocking() {
+    return this.shieldRaise >= SHIELD.blockAt && this.shieldBrokenT <= 0;
+  }
+
+  /**
+   * Incoming damage hits the shield (caller checked the direction): drains shield HP, returns the
+   * damage that gets through (only when the shield breaks on this hit).
+   */
+  absorb(damage: number): number {
+    if (!this.shieldBlocking) return damage;
+    this.shieldHp -= damage;
+    this.sinceShieldHit = 0;
+    this.events.shieldBlocked = true;
+    if (this.shieldHp > 0) return 0;
+    const through = -this.shieldHp;
+    this.shieldHp = 0;
+    this.shieldBrokenT = SHIELD.brokenCooldown;
+    this.shieldRaise = 0;
+    this.events.shieldBroken = true;
+    this.onShieldDown();
+    return through;
+  }
+
+  private onShieldDown() {
+    this.shieldRecoverT = SHIELD.recoverTime;
+    this.sinceShieldDown = 0;
+    this.bloom = Math.min(this.stats.bloomMax, this.bloom + SHIELD.lowerBloom);
+    this.events.shieldLowered = true;
   }
 
   /** 0..1 progress of a reload/swap, else null. */
@@ -153,6 +226,8 @@ export class WeaponSystem {
         return s.swapOutTime;
       case 'swapIn':
         return s.swapInTime;
+      case 'melee':
+        return this.melee.time;
       default:
         return 0;
     }
@@ -172,6 +247,8 @@ export class WeaponSystem {
     const ev = this.events;
     ev.shots = [];
     ev.dryFire = ev.reloadStarted = ev.magOut = ev.magIn = ev.chamber = ev.swapStarted = false;
+    ev.meleeStarted = ev.meleeStrike = ev.shieldRaised = ev.shieldLowered = false;
+    ev.shieldBlocked = ev.shieldBroken = false;
     this.foldPitch = this.foldYaw = 0;
     const s = this.stats;
 
@@ -198,21 +275,47 @@ export class WeaponSystem {
         : input.pressed.has('swap')
           ? (this.current + 1) % this.slots.length
           : -1;
-    if (
-      want >= 0 &&
-      want < this.slots.length &&
-      want !== this.current &&
-      this.phase !== 'swapOut'
-    ) {
-      this.pendingSlot = want;
-      this.phase = 'swapOut';
-      this.phaseT = 0;
-      ev.swapStarted = true;
+    // Two weapons, two keys: a press always gets you that weapon, even mid-swap (changing your
+    // mind during the swap-out redirects it; going back to the current one brings it back up).
+    if (want >= 0 && want < this.slots.length) {
+      if (this.phase === 'swapOut') {
+        if (want === this.current) {
+          this.phase = 'swapIn';
+          this.phaseT = Math.max(0, this.stats.swapInTime * (1 - this.phaseT / this.stats.swapOutTime));
+          this.pendingSlot = -1;
+        } else this.pendingSlot = want;
+      } else if (want !== this.current) {
+        this.pendingSlot = want;
+        this.phase = 'swapOut';
+        this.phaseT = 0;
+        ev.swapStarted = true;
+      }
     }
 
-    // ADS: not while sprinting, swapping or mantling.
+    this.stepShield(dt, input, ctx);
+
+    // Melee: interrupts a reload that hasn't added ammo yet (it has to be restarted).
+    if (
+      input.pressed.has('melee') &&
+      !ctx.mantling &&
+      this.shieldRaise <= 0 &&
+      (this.phase === 'ready' || (this.phase === 'reload' && !this.ammoAdded))
+    ) {
+      this.phase = 'melee';
+      this.phaseT = 0;
+      this.meleeStruck = false;
+      this.ads = 0;
+      ev.meleeStarted = true;
+    }
+
+    // ADS: not while sprinting, swapping, mantling, meleeing or behind the shield.
     const canAds =
-      !ctx.sprint && !ctx.mantling && this.phase !== 'swapOut' && this.phase !== 'swapIn';
+      !ctx.sprint &&
+      !ctx.mantling &&
+      this.phase !== 'swapOut' &&
+      this.phase !== 'swapIn' &&
+      this.phase !== 'melee' &&
+      this.shieldRaise <= 0;
     const adsTarget = canAds && input.down.has('ads') ? 1 : 0;
     if (adsTarget === 1 && !this.adsRising) {
       // Aim-in speed depends on what you were doing when you started aiming.
@@ -223,7 +326,8 @@ export class WeaponSystem {
             ? s.adsTimeTacMul
             : s.adsTimeSprintMul
           : 1;
-      this.adsInMul = Math.max(walk, fromSprint);
+      const fromShield = this.sinceShieldDown < SHIELD.adsPenaltyWindow ? SHIELD.adsTimeMul : 1;
+      this.adsInMul = Math.max(walk, fromSprint) * fromShield;
     }
     this.adsRising = adsTarget === 1;
     if (adsTarget > this.ads)
@@ -233,10 +337,11 @@ export class WeaponSystem {
 
     this.stepPhase(dt);
 
-    // Reload request.
+    // Reload request (not from behind the shield).
     if (
       input.pressed.has('reload') &&
       this.phase === 'ready' &&
+      this.shieldRaise <= 0 &&
       this.slot.mag < s.magSize &&
       this.slot.reserve > 0
     )
@@ -245,6 +350,7 @@ export class WeaponSystem {
     // Mag ran dry (e.g. holding the trigger through the last round): reload as soon as the gun cycles.
     if (
       this.phase === 'ready' &&
+      this.shieldRaise <= 0 &&
       this.slot.mag === 0 &&
       this.slot.reserve > 0 &&
       this.cooldown <= 0
@@ -260,6 +366,8 @@ export class WeaponSystem {
       !ctx.sprint &&
       !ctx.mantling &&
       this.sprintOutT <= 0 &&
+      this.shieldRaise <= 0 &&
+      this.shieldRecoverT <= 0 &&
       this.cooldown <= 0;
     if (wantsShot && ready) {
       if (this.slot.mag > 0) this.fire(ctx);
@@ -273,6 +381,32 @@ export class WeaponSystem {
     this.triggerHeld = trigger;
 
     this.stepRecoil(dt);
+  }
+
+  /** Raise/lower, regen and break cooldown. */
+  private stepShield(dt: number, input: InputState, ctx: WeaponContext) {
+    const wasBroken = this.shieldBrokenT > 0;
+    this.shieldBrokenT = Math.max(0, this.shieldBrokenT - dt);
+    if (wasBroken && this.shieldBrokenT <= 0) this.shieldHp = Math.max(this.shieldHp, SHIELD.hp * 0.5);
+    this.shieldRecoverT = Math.max(0, this.shieldRecoverT - dt);
+    this.sinceShieldDown += dt;
+    this.sinceShieldHit += dt;
+    if (this.sinceShieldHit > SHIELD.regenDelay && this.shieldBrokenT <= 0)
+      this.shieldHp = Math.min(SHIELD.hp, this.shieldHp + SHIELD.regenRate * dt);
+
+    const free = this.phase !== 'melee' && this.phase !== 'swapOut' && this.phase !== 'swapIn';
+    const want = input.down.has('shield') && this.shieldBrokenT <= 0 && !ctx.mantling && free;
+    if (want && this.shieldRaise <= 0) {
+      // Pulling the shield cuts a reload short (no ammo unless it was already added).
+      if (this.phase === 'reload') this.phase = 'ready';
+      this.events.shieldRaised = true;
+    }
+    if (want) this.shieldRaise = Math.min(1, this.shieldRaise + dt / SHIELD.raiseTime);
+    else if (this.shieldRaise > 0) {
+      this.shieldRaise = Math.max(0, this.shieldRaise - dt / SHIELD.lowerTime);
+      if (this.shieldRaise <= 0) this.onShieldDown();
+    }
+    if (this.shieldRaise > 0) this.ads = 0;
   }
 
   private fire(ctx: WeaponContext) {
@@ -373,11 +507,20 @@ export class WeaponSystem {
       this.sprayShots = 0;
     } else if (this.phase === 'swapIn' && this.phaseT >= dur) {
       this.phase = 'ready';
+    } else if (this.phase === 'melee') {
+      if (!this.meleeStruck && this.phaseT >= dur * this.melee.hitAt) {
+        this.meleeStruck = true;
+        ev.meleeStrike = true;
+      }
+      if (this.phaseT >= dur) this.phase = 'ready';
     }
   }
 
   /** Refill everything (respawn). */
   refill() {
+    this.shieldHp = SHIELD.hp;
+    this.shieldBrokenT = 0;
+    this.shieldRaise = 0;
     for (const s of this.slots) {
       s.mag = s.def.stats.magSize;
       s.reserve = s.def.stats.reserve;

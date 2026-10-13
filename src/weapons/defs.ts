@@ -81,8 +81,62 @@ export interface WeaponDef {
   muzzle: [number, number, number];
   hipOffset: [number, number, number];
   adsDistance: number;
+  /** Melee with this weapon out: rifle-butt bash, or the off-hand knife (pistol + knife, MW-style). */
+  melee: 'bash' | 'knife';
   stats: WeaponStats;
 }
+
+/** Melee (E). Times in seconds; `hitAt` = fraction of the swing where the hit lands. */
+export const MELEE = defineTunables(
+  'melee',
+  {
+    bashTime: 0.62,
+    bashHitAt: 0.27,
+    bashDamage: 60,
+    bashRange: 2.0,
+    knifeTime: 0.38,
+    knifeHitAt: 0.24,
+    knifeDamage: 90,
+    knifeRange: 2.1,
+    /** Targets within this range (and a narrow cone) pull you in. */
+    lungeRange: 4,
+    lungeSpeed: 9,
+    lungeConeDeg: 14,
+    /** Half-angle of the hit fan (several rays), degrees. */
+    fanDeg: 12,
+  },
+  { lungeConeDeg: [0, 45, 0.5], fanDeg: [0, 40, 0.5] },
+);
+
+/**
+ * Riot shield (hold Q): blocks projectiles from the front, at the cost of offense. Up = no firing,
+ * ADS or reloading (raising cancels a reload); coming down = a beat before you can shoot + slow aim-in.
+ * Has its own HP: regenerates when not hit, breaks (cooldown) when drained.
+ */
+export const SHIELD = defineTunables(
+  'shield',
+  {
+    raiseTime: 0.18,
+    lowerTime: 0.22,
+    /** After lowering: no firing for this long. */
+    recoverTime: 0.35,
+    /** ADS-in time multiplier for aims started within adsPenaltyWindow of lowering. */
+    adsTimeMul: 1.5,
+    adsPenaltyWindow: 1,
+    /** Bloom added when it comes down (first shots are a little wild). */
+    lowerBloom: 1.2,
+    /** Blocks incoming fire within this half-angle of the view direction. */
+    coverDeg: 65,
+    /** Must be at least this far up to block. */
+    blockAt: 0.6,
+    hp: 150,
+    regenDelay: 2,
+    regenRate: 50,
+    brokenCooldown: 4,
+    moveMul: 0.7,
+  },
+  { coverDeg: [10, 90, 1], blockAt: [0, 1, 0.01] },
+);
 
 export const AR: WeaponDef = {
   id: 'ar',
@@ -92,6 +146,7 @@ export const AR: WeaponDef = {
   muzzle: [0, 0.012, -0.52],
   hipOffset: [0.13, -0.15, -0.3],
   adsDistance: 0.3,
+  melee: 'bash',
   stats: defineTunables('weapon: AR', {
     rpm: 720,
     auto: true,
@@ -151,6 +206,7 @@ export const PISTOL: WeaponDef = {
   muzzle: [0, 0.035, -0.2],
   hipOffset: [0.12, -0.13, -0.28],
   adsDistance: 0.24,
+  melee: 'knife',
   stats: defineTunables('weapon: pistol', {
     rpm: 420,
     auto: false,

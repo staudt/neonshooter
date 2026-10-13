@@ -22,6 +22,19 @@ const BOUNDS: Record<SfxName, [number, number]> = {
   slide: [0.4, 0.8],
   footstep: [0.05, 0.25],
   mantle: [0.2, 0.6],
+  melee_swing: [0.15, 0.4],
+  melee_hit: [0.15, 0.4],
+  shield_up: [0.15, 0.4],
+  shield_block: [0.15, 0.4],
+  shield_break: [0.4, 0.9],
+  fireball: [0.3, 0.6],
+  fire_impact: [0.25, 0.5],
+  demon_growl: [0.5, 1.0],
+  demon_screech: [0.3, 0.6],
+  possessed_shriek: [0.4, 0.7],
+  hound_snarl: [0.3, 0.6],
+  demon_death: [0.5, 1.0],
+  gore_splat: [0.15, 0.4],
 };
 
 describe('synth', () => {

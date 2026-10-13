@@ -20,11 +20,24 @@ export interface AIContext {
   allies: readonly Enemy[];
 }
 
+/** A melee hit on the player (claw, bite, pounce). Shield can block it like a projectile. */
+export interface MeleeAttack {
+  from: Vector3;
+  damage: number;
+  /** Shove applied to the player (m/s), optional. */
+  knock?: Vector3;
+}
+
 /** Events for audio/FX, drained by the manager each step. */
 export interface EnemyEvents {
   fired: Vector3[];
   charging: Vector3[];
+  attacks: MeleeAttack[];
+  /** Became alerted this step (growl). */
+  alerted: boolean;
 }
+
+export type EnemyKind = 'grunt' | 'drone' | 'possessed' | 'hound';
 
 /** Ray vs vertical capsule (segment center ± halfHeight on Y). Returns entry distance or null. */
 export function rayCapsuleY(
@@ -69,13 +82,18 @@ const FLASH = new Color(1, 1, 1);
  * hit flash, stagger, perception helpers. Subclasses implement movement and attacks.
  */
 export abstract class Enemy implements Hittable {
-  abstract readonly kind: 'grunt' | 'drone';
+  abstract readonly kind: EnemyKind;
+  /** Demons bleed; the robot grunt sparks. */
+  get bleeds() {
+    return this.kind !== 'grunt';
+  }
   health: number;
   dead = false;
   alerted = false;
   /** Set when shot this step (manager uses it to alert allies). */
   wasHit = false;
-  readonly events: EnemyEvents = { fired: [], charging: [] };
+  readonly events: EnemyEvents = { fired: [], charging: [], attacks: [], alerted: false };
+  private wasAlerted = false;
   protected flashT = 0;
   protected staggerT = 0;
   private recentDamage = 0;
@@ -115,7 +133,15 @@ export abstract class Enemy implements Hittable {
       if (d <= maxDist)
         best = { distance: d, part: 'head', normal: p.clone().sub(core).normalize() };
     }
-    const t = rayCapsuleY(ray, body, this.hit.body.halfHeight * k, this.hit.body.radius * k);
+    let t = rayCapsuleY(ray, body, this.hit.body.halfHeight * k, this.hit.body.radius * k);
+    // extra body spheres (long bodies: hounds)
+    for (const e of this.hit.extra ?? []) {
+      const c = this.root.localToWorld(e.center.clone());
+      if (ray.intersectSphere(new Sphere(c, e.radius * k), p)) {
+        const d = p.distanceTo(ray.origin);
+        if (t === null || d < t) t = d;
+      }
+    }
     // The core sits in the body's surface: prefer it when both are hit at about the same depth.
     if (t !== null && t <= maxDist && (!best || t < best.distance - 0.08)) {
       const point = ray.at(t, new Vector3());
@@ -152,6 +178,9 @@ export abstract class Enemy implements Hittable {
   protected tick(dt: number, ctx: AIContext, eye: Vector3) {
     this.events.fired.length = 0;
     this.events.charging.length = 0;
+    this.events.attacks.length = 0;
+    this.events.alerted = this.alerted && !this.wasAlerted;
+    this.wasAlerted = this.alerted;
     this.wasHit = false;
     this.flashT = Math.max(0, this.flashT - dt);
     this.staggerT = Math.max(0, this.staggerT - dt);

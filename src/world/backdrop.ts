@@ -25,7 +25,7 @@ import {
   type Texture,
 } from 'three';
 import { defineTunables } from '../dev/tuning';
-import { NOISE_GLSL } from './materials';
+import { NOISE_GLSL, SHADER_DETAIL } from './materials';
 import { adTexture } from './signs';
 
 /**
@@ -137,6 +137,8 @@ void main() {
   col += (vec3(1.0, 0.13, 0.04) * ring * 3.0 + vec3(0.45, 0.05, 0.02) * glow * 0.6 + vec3(0.25, 0.02, 0.01) * inner * 0.5)
     * uRingGlow * smoothstep(0.1, 0.6, uCorr);
   gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 
@@ -216,6 +218,8 @@ void main() {
     col = vec3(0.02, 0.008, 0.008) + vec3(1.0, 0.12, 0.03) * (vein * (0.6 + 2.5 * t * t) + pow(t, 6.0) * 1.5) * (0.4 + uCorr);
   }
   gl_FragColor = vec4(hazeMix(col, vWorld), 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 
@@ -231,6 +235,8 @@ void main() {
   float fires = smoothstep(0.72, 0.9, fbm(vec3(p * 0.004, uTime * 0.03)));
   vec3 col = vec3(0.02, 0.01, 0.01) + vec3(1.0, 0.45, 0.15) * street * 0.5 + vec3(1.0, 0.18, 0.05) * fires * 1.4;
   gl_FragColor = vec4(hazeMix(col, vWorld), 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 
@@ -270,6 +276,8 @@ void main() {
   vec2 c = gl_PointCoord - 0.5;
   float a = exp(-dot(c, c) * 14.0) * vAlpha;
   gl_FragColor = vec4(vColor * a * 2.0, a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 
@@ -310,6 +318,7 @@ export class Backdrop {
       uniforms: this.uniforms,
       vertexShader,
       fragmentShader,
+      defines: { FBM_OCTAVES: SHADER_DETAIL.octaves },
       ...extra,
     });
     this.disposables.push(m);

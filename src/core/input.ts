@@ -13,6 +13,8 @@ export type Action =
   | 'weapon1'
   | 'weapon2'
   | 'interact'
+  | 'melee'
+  | 'shield'
   | 'noclip';
 
 /** One sim step's view of the controls. `pressed`/`released` are edges since the previous sample. */
@@ -41,10 +43,11 @@ const KEY_BINDINGS: Record<string, Action> = {
   ControlLeft: 'crouch',
   ShiftLeft: 'sprint',
   KeyR: 'reload',
-  KeyQ: 'swap',
   Digit1: 'weapon1',
   Digit2: 'weapon2',
   KeyF: 'interact',
+  KeyE: 'melee',
+  KeyQ: 'shield',
   KeyV: 'noclip',
 };
 

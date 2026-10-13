@@ -462,6 +462,219 @@ const mantle: Synth = (sr, seed) => {
   });
 };
 
+/** Whoosh: band-passed noise sweeping down, fast swell. */
+const meleeSwing: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.28, (out) => {
+    const n = whiteNoise(len(sr, 0.28), rand);
+    // moving band: split into chunks with a falling center frequency
+    const chunk = len(sr, 0.02);
+    for (let c = 0; c * chunk < n.length; c++) {
+      const part = bandpass(n.subarray(c * chunk, (c + 1) * chunk + chunk), sr, 2400 - c * 120, 1.2);
+      mixInto(out, part.subarray(0, chunk), sr, (c * chunk) / sr, 1);
+    }
+    for (let i = 0; i < out.length; i++) {
+      const t = i / sr;
+      out[i] *= Math.sin(Math.PI * Math.min(1, t / 0.28)) ** 1.5;
+    }
+  });
+};
+
+/** Meaty impact: low thud + wet crunch. */
+const meleeHit: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.3, (out) => {
+    mixInto(out, sweep(sr, 0.16, 140, 50, 0.05), sr, 0, 1);
+    mixInto(out, noiseBurst(sr, rand, 0.06, 0.018, 1200), sr, 0, 0.9);
+    const crunch = bandBurst(sr, rand, 0.12, 0.03, 2600, 1.5);
+    for (let i = 0; i < crunch.length; i++) crunch[i] *= rand() < 0.4 ? 1.4 : 0.3;
+    mixInto(out, crunch, sr, 0.004, 0.6);
+    softClip(out, 2);
+  });
+};
+
+/** Energy shield powering up: rising hum + sparkle. */
+const shieldUp: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.3, (out) => {
+    const hum = sweep(sr, 0.3, 180, 420, 0.5);
+    for (let i = 0; i < hum.length; i++) hum[i] *= Math.min(1, i / sr / 0.12);
+    mixInto(out, hum, sr, 0, 0.7);
+    mixInto(out, bandBurst(sr, rand, 0.25, 0.1, 5200, 2), sr, 0.03, 0.25);
+  });
+};
+
+/** Projectile stopped by the shield: electric zap + low thump. */
+const shieldBlock: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.3, (out) => {
+    mixInto(out, sweep(sr, 0.12, 900, 120, 0.04), sr, 0, 0.6);
+    const zap = bandBurst(sr, rand, 0.2, 0.06, 3200, 0.8);
+    for (let i = 0; i < zap.length; i++) zap[i] *= 0.6 + 0.4 * Math.sign(Math.sin((i / sr) * TWO_PI * 90));
+    mixInto(out, zap, sr, 0, 0.7);
+    mixInto(out, sweep(sr, 0.1, 110, 60, 0.03), sr, 0, 0.8);
+  });
+};
+
+/** Shield breaks: glassy shatter over a falling hum. */
+const shieldBreak: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.7, (out) => {
+    mixInto(out, sweep(sr, 0.6, 420, 60, 0.25), sr, 0, 0.6);
+    for (let k = 0; k < 9; k++)
+      mixInto(out, metalRing(sr, 2200 + rand() * 3500, 0.2, 0.03 + rand() * 0.04), sr, k * 0.022 + rand() * 0.02, 0.35);
+    mixInto(out, noiseBurst(sr, rand, 0.35, 0.09, 9000, 2500), sr, 0, 0.5);
+  });
+};
+
+/**
+ * Throat: sawtooth glottal source with pitch jitter + subharmonic roughness (growl), shaped by
+ * formant band-passes. `f0(t)` = pitch contour, `env(t)` = amplitude contour.
+ */
+function voice(
+  sr: number,
+  rand: Rand,
+  dur: number,
+  f0: (t: number) => number,
+  env: (t: number) => number,
+  formants: [number, number, number][],
+  rough: number,
+) {
+  const n = len(sr, dur);
+  const src = new Float32Array(n);
+  let ph = 0;
+  let jitter = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr;
+    jitter += ((rand() - 0.5) * 0.4 - jitter) * 0.002;
+    ph += (f0(t) * (1 + jitter * rough)) / sr;
+    ph -= Math.floor(ph);
+    const saw = 2 * ph - 1;
+    const sub = 1 - rough * 0.6 * (0.5 + 0.5 * Math.sin(TWO_PI * ph * 0.5 + t * 3));
+    src[i] = (saw * sub + (rand() - 0.5) * rough * 0.5) * env(t);
+  }
+  const out = new Float32Array(n);
+  for (const [f, q, g] of formants) mixInto(out, bandpass(Float32Array.from(src), sr, f, q), sr, 0, g);
+  return out;
+}
+
+const swell = (dur: number, attack: number) => (t: number) =>
+  Math.min(1, t / attack) * Math.max(0, 1 - Math.max(0, t - attack) / (dur - attack)) ** 1.2;
+
+/** Fireball spat out: breathy whoosh + crackle. */
+const fireball: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.45, (out) => {
+    const roar = lowpass(whiteNoise(len(sr, 0.45), rand), sr, 900, 2);
+    const e = swell(0.45, 0.06);
+    for (let i = 0; i < roar.length; i++) roar[i] *= e(i / sr);
+    mixInto(out, roar, sr, 0, 1);
+    mixInto(out, sweep(sr, 0.2, 220, 70, 0.08), sr, 0, 0.5);
+    for (let k = 0; k < 14; k++) mixInto(out, click(sr, rand, 0.003, 2500), sr, rand() * 0.4, 0.35);
+    softClip(out, 1.6);
+  });
+};
+
+/** Fireball hits a wall: thump + flare. */
+const fireImpact: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.4, (out) => {
+    mixInto(out, sweep(sr, 0.18, 160, 45, 0.06), sr, 0, 1);
+    mixInto(out, noiseBurst(sr, rand, 0.35, 0.09, 1600), sr, 0, 0.8);
+    for (let k = 0; k < 10; k++) mixInto(out, click(sr, rand, 0.003, 2000), sr, 0.03 + rand() * 0.3, 0.3);
+  });
+};
+
+/** Alerted demon: low rolling growl. */
+const demonGrowl: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.8, (out) => {
+    const g = voice(sr, rand, 0.8, (t) => 62 + 14 * Math.sin(t * 9) - t * 10, swell(0.8, 0.12), [
+      [380, 2, 1],
+      [900, 3, 0.45],
+      [2300, 4, 0.15],
+    ], 1);
+    mixInto(out, g, sr, 0, 1);
+    softClip(out, 2.2);
+  });
+};
+
+/** Flying demon charging its spit: rising, tearing screech. */
+const demonScreech: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.45, (out) => {
+    const v = voice(sr, rand, 0.45, (t) => 260 + t * 900, swell(0.45, 0.2), [
+      [1100, 3, 1],
+      [2400, 4, 0.7],
+      [3600, 5, 0.3],
+    ], 0.8);
+    mixInto(out, v, sr, 0, 1);
+    softClip(out, 2.5);
+  });
+};
+
+/** Possessed winding up: a human scream gone wrong. */
+const possessedShriek: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.55, (out) => {
+    const v = voice(
+      sr,
+      rand,
+      0.55,
+      (t) => 340 + t * 260 + 25 * Math.sin(t * 38),
+      swell(0.55, 0.08),
+      [
+        [850, 4, 1],
+        [1300, 5, 0.8],
+        [2700, 6, 0.4],
+      ],
+      0.6,
+    );
+    mixInto(out, v, sr, 0, 1);
+    softClip(out, 2);
+  });
+};
+
+/** Hound crouching to pounce: short wet snarl. */
+const houndSnarl: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.42, (out) => {
+    const v = voice(sr, rand, 0.42, (t) => 85 + 30 * Math.sin(t * 22), swell(0.42, 0.05), [
+      [450, 2, 1],
+      [1400, 3, 0.6],
+      [3200, 4, 0.25],
+    ], 1);
+    mixInto(out, v, sr, 0, 1);
+    mixInto(out, bandBurst(sr, rand, 0.3, 0.08, 2600, 1.5), sr, 0.02, 0.25);
+    softClip(out, 2.4);
+  });
+};
+
+/** Demon dies: falling scream + wet burst. */
+const demonDeath: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.8, (out) => {
+    const v = voice(sr, rand, 0.7, (t) => 300 - t * 330, swell(0.7, 0.04), [
+      [700, 3, 1],
+      [1500, 4, 0.6],
+      [2900, 5, 0.25],
+    ], 0.9);
+    mixInto(out, v, sr, 0, 0.9);
+    mixInto(out, sweep(sr, 0.2, 120, 40, 0.07), sr, 0, 0.8);
+    mixInto(out, noiseBurst(sr, rand, 0.25, 0.06, 1200), sr, 0, 0.7);
+    softClip(out, 1.8);
+  });
+};
+
+/** Wet splat: lowpassed noise squelch + thump. */
+const goreSplat: Synth = (sr, seed) => {
+  const rand = mulberry32(seed);
+  return render(sr, 0.3, (out) => {
+    mixInto(out, sweep(sr, 0.12, 110, 50, 0.04), sr, 0, 0.8);
+    for (let k = 0; k < 4; k++) mixInto(out, noiseBurst(sr, rand, 0.08, 0.02, 700 + rand() * 600), sr, k * 0.03 + rand() * 0.02, 0.7);
+  });
+};
+
 export const SYNTHS: Record<SfxName, Synth> = {
   ar_shot: arShot,
   pistol_shot: pistolShot,
@@ -480,4 +693,17 @@ export const SYNTHS: Record<SfxName, Synth> = {
   slide,
   footstep,
   mantle,
+  melee_swing: meleeSwing,
+  melee_hit: meleeHit,
+  shield_up: shieldUp,
+  shield_block: shieldBlock,
+  shield_break: shieldBreak,
+  fireball,
+  fire_impact: fireImpact,
+  demon_growl: demonGrowl,
+  demon_screech: demonScreech,
+  possessed_shriek: possessedShriek,
+  hound_snarl: houndSnarl,
+  demon_death: demonDeath,
+  gore_splat: goreSplat,
 };

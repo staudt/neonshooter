@@ -36,7 +36,11 @@
 
 @PointClass base(Angle, Encounter) size(-16 -16 0, 16 16 64) color(255 60 60) = enemy_grunt : "Grunt robot (ground, projectile bursts)" []
 
-@PointClass base(Angle, Encounter) size(-12 -12 -12, 12 12 12) color(255 140 0) = enemy_drone : "Drone (flying, flanks)" []
+@PointClass base(Angle, Encounter) size(-24 -24 -24, 24 24 24) color(255 140 0) = enemy_drone : "Flying demon (Maw): orbits, spits fireballs" []
+
+@PointClass base(Angle, Encounter) size(-14 -14 0, 14 14 58) color(220 40 20) = enemy_possessed : "Possessed (corrupted human): melee rusher — chase, wind-up, swipe" []
+
+@PointClass base(Angle, Encounter) size(-16 -16 0, 16 16 30) color(200 70 0) = enemy_hound : "Hell-hound: fast, telegraphed pounce, bites up close" []
 
 @PointClass base(Angle) size(-12 -12 0, 12 12 56) color(255 200 0) = target_dummy : "Shooting-range dummy (respawns)" [
     health(integer) : "Health" : 100

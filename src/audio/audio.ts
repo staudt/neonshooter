@@ -17,7 +17,20 @@ export type SfxName =
   | 'land'
   | 'slide'
   | 'footstep'
-  | 'mantle';
+  | 'mantle'
+  | 'melee_swing'
+  | 'melee_hit'
+  | 'shield_up'
+  | 'shield_block'
+  | 'shield_break'
+  | 'fireball'
+  | 'fire_impact'
+  | 'demon_growl'
+  | 'demon_screech'
+  | 'possessed_shriek'
+  | 'hound_snarl'
+  | 'demon_death'
+  | 'gore_splat';
 
 export interface PlayOptions {
   volume?: number;

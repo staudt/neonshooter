@@ -9,6 +9,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
+  ShaderMaterial,
   type Material,
 } from 'three';
 import type { WeaponDef } from './defs';
@@ -157,4 +158,107 @@ function finish(root: Group, def: WeaponDef, mag: Group): GunModel {
 
 export function buildGunModel(def: WeaponDef): GunModel {
   return def.id === 'ar' ? buildAR(def) : buildPistol(def);
+}
+
+// ---- off-hand knife (pistol + knife) ----
+
+/** Combat knife, grip at the origin, blade along -Z, edge facing -Y. */
+export function buildKnife(): Group {
+  const g = new Group();
+  g.name = 'knife';
+  const steel = new MeshStandardMaterial({ color: 0x9aa1aa, roughness: 0.25, metalness: 0.95 });
+  g.add(box(0.026, 0.03, 0.11, 0, 0, 0.02, mats.dark)); // handle
+  g.add(box(0.06, 0.012, 0.012, 0, 0, -0.04, mats.body)); // guard
+  const blade = box(0.006, 0.032, 0.15, 0, 0.002, -0.12, steel);
+  g.add(blade);
+  const tip = new Mesh(new CylinderGeometry(0, 0.016, 0.05, 4), steel);
+  tip.rotation.x = -Math.PI / 2;
+  tip.scale.set(0.38, 1, 1);
+  tip.position.set(0, 0.002, -0.22);
+  g.add(tip);
+  const glint = new MeshStandardMaterial({ color: 0x000000, emissive: 0x9fe8ff, emissiveIntensity: 0.6 });
+  g.add(box(0.007, 0.003, 0.15, 0, -0.016, -0.12, glint)); // edge glint
+  return g;
+}
+
+// ---- energy riot shield ----
+
+export interface ShieldModel {
+  root: Group;
+  material: ShaderMaterial;
+}
+
+const SHIELD_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const SHIELD_FRAG = /* glsl */ `
+uniform float uTime, uFlash, uHealth, uAlpha;
+varying vec2 vUv;
+// distance to the nearest hex center edge (0 at edges)
+float hexEdge(vec2 p) {
+  vec2 r = vec2(1.0, 1.732);
+  vec2 h = r * 0.5;
+  vec2 a = mod(p, r) - h;
+  vec2 b = mod(p - h, r) - h;
+  vec2 g = dot(a, a) < dot(b, b) ? a : b;
+  vec2 q = abs(g);
+  return 0.5 - max(dot(q, normalize(vec2(1.0, 1.732))), q.x);
+}
+void main() {
+  vec2 uv = vUv;
+  float edgeDist = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+  float border = 1.0 - smoothstep(0.0, 0.06, edgeDist);
+  float hex = 1.0 - smoothstep(0.0, 0.06, hexEdge(uv * vec2(30.0, 20.0)));
+  // viewport: the middle is nearly clear so you can still see what's coming
+  float center = smoothstep(0.08, 0.42, edgeDist);
+  float scan = 0.5 + 0.5 * sin(uv.y * 180.0 - uTime * 6.0);
+  float flicker = uHealth < 0.35 ? step(0.25, fract(sin(floor(uTime * 24.0) * 91.7) * 4375.5)) : 1.0;
+  float a = (border * 0.55 + hex * mix(0.26, 0.025, center) + scan * 0.02 + uFlash * (0.3 + hex * 0.6)) * flicker;
+  vec3 col = mix(vec3(0.25, 0.85, 1.0), vec3(1.0, 0.35, 0.2), (1.0 - uHealth) * 0.6);
+  gl_FragColor = vec4(col * a * 1.6, a * uAlpha);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}
+`;
+
+/**
+ * Curved translucent panel in front of the camera (viewmodel space), dark metal frame bars at the
+ * edges. `material.uniforms`: uFlash (block hit), uHealth (0..1), uAlpha (raise fade).
+ */
+export function buildShield(): ShieldModel {
+  const root = new Group();
+  root.name = 'shield';
+  const radius = 0.72;
+  const arc = 1.2;
+  const height = 0.66;
+  const geo = new CylinderGeometry(radius, radius, height, 20, 1, true, Math.PI - arc / 2, arc);
+  geo.translate(0, 0, radius - 0.44); // panel ~0.44 m in front of the camera
+  const material = new ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uFlash: { value: 0 },
+      uHealth: { value: 1 },
+      uAlpha: { value: 1 },
+    },
+    vertexShader: SHIELD_VERT,
+    fragmentShader: SHIELD_FRAG,
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    side: DoubleSide,
+  });
+  root.add(new Mesh(geo, material));
+  for (const t of [Math.PI - arc / 2, Math.PI + arc / 2]) {
+    const bar = box(0.03, height + 0.03, 0.03, 0, 0, 0, mats.dark);
+    bar.position.set(radius * Math.sin(t), 0, radius * Math.cos(t) + radius - 0.44);
+    root.add(bar);
+  }
+  // grip: the left hand holds a strut behind the panel
+  root.add(box(0.035, 0.11, 0.035, -0.14, -0.22, -0.33, mats.body));
+  return { root, material };
 }

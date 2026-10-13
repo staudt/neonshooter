@@ -92,7 +92,7 @@ function drawMetro(
       arr === 'right' ? w - pad - s * 0.5 : pad + s * 0.5,
       h / 2,
       Math.min(s, h * 0.6),
-      arr === 'right' ? 1 : -1,
+      arr === 'right' ? -1 : 1,
     );
     if (arr !== 'right') x0 += s + pad * 0.5;
   }

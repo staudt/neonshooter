@@ -13,7 +13,8 @@ const dir = process.env.SMOKE_DIR ?? 'test-results';
 const RUNS = [
   { map: 'test_course', shots: [[2.75, 'smoke-fp'], [3.55, 'smoke-reload']], overview: 'smoke' },
   { map: 'arena_test', shots: [[4.6, 'smoke-arena-fp']], overview: 'smoke-arena' },
-  { map: 'station_slice', shots: [[2.2, 'smoke-station-tunnel'], [3.6, 'smoke-station-fp']], overview: 'smoke-station' },
+  { map: 'stage1', shots: [[3.0, 'smoke-stage1-fp']], overview: 'smoke-stage1' },
+  { map: 'station_slice', shots: [[2.2, 'smoke-station-tunnel'], [3.6, 'smoke-station-fp'], [5.4, 'smoke-station-shield'], [6.62, 'smoke-station-knife']], overview: 'smoke-station' },
 ];
 const only = process.env.SMOKE_MAP;
 

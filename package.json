@@ -15,7 +15,8 @@
     "gen:course": "node scripts/gen-test-course.ts",
     "gen:arena": "node scripts/gen-arena.ts",
     "shots": "node scripts/shots.mjs",
-    "gen:station": "node scripts/gen-station.ts"
+    "gen:station": "node scripts/gen-station.ts",
+    "gen:stage1": "node scripts/gen-stage1.ts"
   },
   "type": "module",
   "private": "true",

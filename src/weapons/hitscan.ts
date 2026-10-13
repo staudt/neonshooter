@@ -6,6 +6,8 @@ export type HitPart = 'head' | 'body';
 /** Anything bullets can hit besides the world (enemies, dummies). */
 export interface Hittable {
   readonly alive: boolean;
+  /** Flesh: bullet hits draw blood (gore) instead of sparks. */
+  readonly bleeds?: boolean;
   /** Nearest intersection of the ray within maxDist, or null. */
   raycast(ray: Ray, maxDist: number): { distance: number; part: HitPart; normal: Vector3 } | null;
   /** Apply damage. Returns true if this killed it. */

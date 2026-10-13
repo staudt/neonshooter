@@ -53,6 +53,8 @@ void main() {
   float a = exp(-dot(c, c) * 16.0) * vAlpha;
   vec3 col = vHeat > 0.5 ? vec3(1.0, 0.32, 0.08) * 3.0 : vec3(0.35, 0.33, 0.32) * 0.5;
   gl_FragColor = vec4(col * a, a);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }
 `;
 

@@ -1,13 +1,14 @@
 import { Euler, PerspectiveCamera, PointLight, Scene, Vector3 } from 'three';
 import { sfx } from '../audio/audio';
 import type { InputState } from '../core/input';
+import type { Gore } from '../fx/gore';
 import { Impacts, type ImpactKind } from '../fx/impacts';
 import { Tracers } from '../fx/tracers';
 import { MOVE, type PlayerController } from '../player/controller';
 import type { Colliders } from '../player/collision';
 import { SETTINGS } from '../settings';
 import { Hud } from '../ui/hud';
-import { LOADOUT } from './defs';
+import { LOADOUT, MELEE, SHIELD } from './defs';
 import { traceBullet, type Hittable } from './hitscan';
 import { ViewModel } from './viewmodel';
 import { WeaponSystem } from './weapon';
@@ -31,11 +32,15 @@ export class Combat {
   readonly hud = new Hud();
   readonly tracers = new Tracers();
   readonly impacts = new Impacts();
+  /** Blood for flesh targets (set by main). */
+  gore: Gore | null = null;
   /** World-space muzzle flash light (always in the scene; intensity pulses — no shader recompiles). */
   private readonly muzzleLight = new PointLight(0xffa64a, 0, 8, 2);
   private readonly muzzleWorld = new Vector3();
   private footstepDist = 0;
   shotsFired = 0;
+  melees = 0;
+  shieldRaises = 0;
   reloads = 0;
   hits = 0;
 
@@ -58,7 +63,95 @@ export class Combat {
   preStep(input: InputState, player: PlayerController) {
     player.sprintBlocked = this.weapons.wantsSprintBlocked(input);
     const s = this.weapons.stats;
-    player.speedMul = 1 + (s.adsMoveMul - 1) * this.weapons.ads;
+    player.speedMul =
+      (1 + (s.adsMoveMul - 1) * this.weapons.ads) *
+      (1 + (SHIELD.moveMul - 1) * this.weapons.shieldRaise);
+  }
+
+  /**
+   * An enemy projectile reached the player. If the shield is up and facing it, the shield takes
+   * it (FX + sound). Returns the damage that still gets through.
+   */
+  tryBlock(hit: { point: Vector3; normal: Vector3; damage: number }, eye: Vector3, viewDir: Vector3) {
+    const ws = this.weapons;
+    // hit.normal points back along the projectile's path, toward the shooter
+    if (!ws.shieldBlocking || hit.normal.dot(viewDir) < Math.cos(SHIELD.coverDeg * DEG))
+      return hit.damage;
+    const through = ws.absorb(hit.damage);
+    const at = eye.clone().addScaledVector(hit.normal, 0.7);
+    this.impacts.spawn(at, hit.normal, 'target', hit.normal.clone().negate());
+    this.viewmodel.onShieldBlock();
+    sfx.play('shield_block', { volume: 0.8, pitch: 0.9 + Math.random() * 0.2 });
+    if (ws.events.shieldBroken) sfx.play('shield_break', { volume: 1 });
+    return through;
+  }
+
+  /** Several rays in a fan around the view direction; nearest target hit wins, else nearest wall. */
+  private traceFan(eye: Vector3, view: { pitch: number; yaw: number }, range: number, fanDeg: number, world: CombatWorld) {
+    let best: ReturnType<typeof traceBullet> = null;
+    let bestTarget: ReturnType<typeof traceBullet> = null;
+    let bestDir = new Vector3();
+    const offsets: [number, number][] = [[0, 0]];
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const r = i % 2 ? fanDeg : fanDeg * 0.5;
+      offsets.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
+    for (const [dy, dp] of offsets) {
+      const dir = new Vector3(0, 0, -1).applyEuler(
+        new Euler(view.pitch + dp * DEG, view.yaw + dy * DEG, 0, 'YXZ'),
+      );
+      const hit = traceBullet(world.colliders, world.surfaceAt, world.targets, eye, dir, range);
+      if (!hit) continue;
+      if (hit.target && (!bestTarget || hit.distance < bestTarget.distance)) {
+        bestTarget = hit;
+        bestDir = dir;
+      }
+      if (!best || hit.distance < best.distance) best = hit;
+    }
+    return { hit: bestTarget ?? best, dir: bestTarget ? bestDir : new Vector3(0, 0, -1).applyEuler(new Euler(view.pitch, view.yaw, 0, 'YXZ')) };
+  }
+
+  private stepMelee(
+    player: PlayerController,
+    view: { pitch: number; yaw: number },
+    eye: Vector3,
+    world: CombatWorld,
+  ) {
+    const ws = this.weapons;
+    const ev = ws.events;
+    const m = ws.melee;
+    if (ev.meleeStarted) {
+      sfx.play('melee_swing', { volume: 0.7, pitch: m.kind === 'knife' ? 1.25 : 0.9 });
+      // Lunge: a target just out of reach pulls you in (MW-style).
+      const { hit } = this.traceFan(eye, view, MELEE.lungeRange, MELEE.lungeConeDeg, world);
+      if (hit?.target && hit.distance > m.range * 0.6) {
+        const to = hit.point.clone().sub(player.position).setY(0);
+        if (to.lengthSq() > 1e-4) {
+          to.normalize().multiplyScalar(MELEE.lungeSpeed);
+          player.velocity.x = to.x;
+          player.velocity.z = to.z;
+        }
+      }
+    }
+    if (!ev.meleeStrike) return;
+    const { hit, dir } = this.traceFan(eye, view, m.range, MELEE.fanDeg, world);
+    if (!hit) return;
+    if (hit.target) {
+      const killed = hit.target.damage(m.damage, 'body', hit.point, dir);
+      this.hits++;
+      this.hud.hitmarker(killed ? 'kill' : 'hit');
+      sfx.play('melee_hit', { volume: 1, pitch: m.kind === 'knife' ? 1.2 : 0.95 });
+      if (killed) sfx.play('kill', { volume: 0.8 });
+      if (hit.target.bleeds && this.gore) this.gore.hit(hit.point, hit.normal, dir, world.colliders, 1.6);
+      else this.impacts.spawn(hit.point, hit.normal, 'target', dir);
+      this.viewmodel.onMeleeHit();
+    } else {
+      const kind: ImpactKind = METAL_SURFACES.has(hit.surface ?? '') ? 'metal' : 'concrete';
+      this.impacts.spawn(hit.point, hit.normal, kind, dir);
+      sfx.play(kind === 'metal' ? 'impact_metal' : 'impact_concrete', { volume: 0.7 });
+      this.viewmodel.onMeleeHit();
+    }
   }
 
   step(
@@ -77,6 +170,13 @@ export class Combat {
       moveFactor: player.horizontalSpeed / MOVE.walkSpeed,
     });
     const ev = ws.events;
+    this.stepMelee(player, view, eye, world);
+    if (ev.meleeStarted) this.melees++;
+    if (ev.shieldRaised) {
+      this.shieldRaises++;
+      sfx.play('shield_up', { volume: 0.6 });
+    }
+    if (ev.shieldLowered) sfx.play('swap', { volume: 0.35, pitch: 0.7 });
 
     for (const shot of ev.shots) {
       this.shotsFired++;
@@ -106,7 +206,8 @@ export class Combat {
         this.hits++;
         this.hud.hitmarker(killed ? 'kill' : head ? 'head' : 'hit');
         sfx.play(killed ? 'kill' : head ? 'headshot' : 'hitmarker', { volume: 0.8 });
-        this.impacts.spawn(hit.point, hit.normal, 'target', dir);
+        if (hit.target.bleeds && this.gore) this.gore.hit(hit.point, hit.normal, dir, world.colliders, head ? 1.3 : 1);
+        else this.impacts.spawn(hit.point, hit.normal, 'target', dir);
       } else {
         const kind: ImpactKind = METAL_SURFACES.has(hit.surface ?? '') ? 'metal' : 'concrete';
         this.impacts.spawn(hit.point, hit.normal, kind, dir);
@@ -182,11 +283,21 @@ export class Combat {
       moveFactor: player.horizontalSpeed / MOVE.walkSpeed,
     });
     const gap = (Math.tan(spread * DEG) / Math.tan((camera.fov * DEG) / 2)) * (innerHeight / 2) + 6;
-    const crosshair = ws.ads < 0.4 && !player.sprint && ws.phase !== 'swapOut' && !player.mantle;
+    const crosshair =
+      ws.ads < 0.4 && !player.sprint && ws.phase !== 'swapOut' && !player.mantle && ws.shieldRaise < 0.5;
     this.hud.setCrosshair(gap, crosshair);
     const slot = ws.slot;
     this.hud.setAmmo(slot.mag, ws.stats.magSize, slot.reserve, ws.def.name);
     this.hud.setReload(ws.phase === 'reload' ? ws.phaseProgress : null);
+    // broken: the bar shows the cooldown refilling
+    const shieldFrac =
+      ws.shieldBrokenT > 0
+        ? 1 - ws.shieldBrokenT / Math.max(0.01, SHIELD.brokenCooldown)
+        : ws.shieldHp / Math.max(1, SHIELD.hp);
+    this.hud.setShield(
+      ws.shieldRaise > 0 || shieldFrac < 0.999 || ws.shieldBrokenT > 0 ? shieldFrac : null,
+      ws.shieldBrokenT > 0,
+    );
     // MW-style prompts: RELOAD when the mag runs low (if there's ammo to reload with).
     const low = slot.mag <= Math.floor(ws.stats.magSize * ws.stats.lowAmmoFraction);
     if (slot.mag === 0 && slot.reserve === 0) this.hud.setHint('NO AMMO', undefined, true);

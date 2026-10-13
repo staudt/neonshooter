@@ -87,15 +87,15 @@ export class GameWorld {
     return { impacts, enemies };
   }
 
-  /** Keep the player from walking through grunts (they're solid). */
+  /** Keep the player from walking through ground enemies (they're solid). */
   pushPlayerOut(player: PlayerController) {
     for (const e of this.enemies.list) {
-      if (e.kind !== 'grunt') continue;
+      if (e.kind === 'drone') continue;
       const dx = player.position.x - e.position.x;
       const dz = player.position.z - e.position.z;
       const dy = player.position.y - e.position.y;
       if (dy > 1.8 || dy < -1.7) continue;
-      const min = 0.42 + player.capsule.radius;
+      const min = (e.kind === 'possessed' ? 0.34 : e.kind === 'hound' ? 0.4 : 0.42) + player.capsule.radius;
       const d = Math.hypot(dx, dz);
       if (d >= min || d < 1e-4) continue;
       const push = (min - d) / d;

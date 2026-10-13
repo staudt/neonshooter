@@ -223,7 +223,7 @@ describe('weapon system', () => {
     expect(delay).toBeLessThanOrEqual(s.tacSprintOutTime + 3 * DT);
   });
 
-  it('swap (weapon2 / Q): swapOut -> swapIn -> ready, switches slot, no firing meanwhile', () => {
+  it('swap (weapon2 / swap action): swapOut -> swapIn -> ready, switches slot, no firing meanwhile', () => {
     for (const key of ['weapon2', 'swap'] as const) {
       const ws = ready();
       const total = AR.stats.swapOutTime + PISTOL.stats.swapInTime;

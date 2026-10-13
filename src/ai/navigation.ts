@@ -13,7 +13,8 @@ const CELL = 0.2;
 const CELL_H = 0.1;
 const AGENT_RADIUS = 0.45;
 const AGENT_HEIGHT = 1.9;
-const AGENT_CLIMB = 0.45;
+/** 0.6 m: stairs bake (a 0.2 m cell can straddle two 0.25 m steps); real cover is all taller. */
+const AGENT_CLIMB = 0.6;
 const AGENT_SLOPE = 40;
 
 /**

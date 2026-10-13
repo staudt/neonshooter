@@ -58,7 +58,7 @@ keep surfaces desaturated, spend red on corruption/danger and cold white on huma
 - Dying respawns you at the last `info_checkpoint` reached via a `trigger_checkpoint`. The encounter you were in
   resets; cleared areas stay cleared.
 - `trigger_stage_end` finishes the stage only when every encounter is cleared.
-- Grunts need navmesh-walkable floor around them (≥ ~1 m wide, slopes ≤ 40°, steps ≤ 0.45 m). Drones fly anywhere.
+- Ground enemies (grunt, possessed, hound) need navmesh-walkable floor (≥ ~1 m wide, slopes ≤ 40°, steps ≤ 0.6 m; stairs of 0.25 m rise bake fine). Drones fly anywhere.
 
 ### Backdrop and open sides
 With `backdrop` = `city`, whatever the player can see past the level's edges is the skyline: leave sides or roofs

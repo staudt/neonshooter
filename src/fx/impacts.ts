@@ -34,8 +34,8 @@ interface Particle {
   gravity: number;
 }
 
-/** One instanced particle layer (sparks or dust): fixed GPU cost, ring-buffer allocation. */
-class ParticleLayer {
+/** One instanced particle layer (sparks, dust, blood): fixed GPU cost, ring-buffer allocation. */
+export class ParticleLayer {
   readonly mesh: InstancedMesh;
   private parts: Particle[] = [];
   private next = 0;
@@ -44,6 +44,7 @@ class ParticleLayer {
     color: Color,
     additive: boolean,
     private stretch: number,
+    opacity = additive ? 1 : 0.55,
   ) {
     this.mesh = new InstancedMesh(
       new BoxGeometry(1, 1, 1),
@@ -51,7 +52,7 @@ class ParticleLayer {
         color,
         blending: additive ? AdditiveBlending : 1,
         transparent: true,
-        opacity: additive ? 1 : 0.55,
+        opacity,
         depthWrite: false,
         toneMapped: !additive,
       }),

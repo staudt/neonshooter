@@ -1,6 +1,6 @@
 import { Color, MeshStandardMaterial, Vector3 } from 'three';
 import { defineTunables } from '../dev/tuning';
-import { NOISE_GLSL } from '../world/materials';
+import { NOISE_GLSL, SHADER_DETAIL } from '../world/materials';
 
 /**
  * The shared demon look: near-black skin, glowing ridged veins (object-space noise, so the pattern
@@ -61,15 +61,17 @@ export function corruptionMaterial(o: SkinOptions = {}): MeshStandardMaterial {
     emissive: 0x000000,
   });
   const own = {
-    uVeinColor: { value: new Color(o.veinColor ?? 0xff2a0c) },
+    // hot orange: demons burn brighter than the crimson corruption in the world (readability)
+    uVeinColor: { value: new Color(o.veinColor ?? 0xff5a12) },
     uVeins: { value: o.veins ?? 1 },
     uScale: { value: o.scale ?? 8 },
     uSeed: { value: new Vector3(Math.random() * 50, Math.random() * 50, Math.random() * 50) },
   };
   m.userData.corruption = own;
-  m.customProgramCacheKey = () => 'corruption';
+  m.customProgramCacheKey = () => `corruption${SHADER_DETAIL.octaves}`;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, shared, own);
+    shader.defines = { ...shader.defines, FBM_OCTAVES: SHADER_DETAIL.octaves };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vSkinPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkinPos = position;');

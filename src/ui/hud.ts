@@ -43,6 +43,9 @@ export class Hud {
   private hitWrap: HTMLDivElement;
   private reloadWrap: HTMLDivElement;
   private reloadFill: HTMLDivElement;
+  private shieldWrap: HTMLDivElement;
+  private shieldFill: HTMLDivElement;
+  private lastShield: string = '';
   private hint: HTMLDivElement;
   private ammoName: HTMLDivElement;
   private ammoMag: HTMLSpanElement;
@@ -127,6 +130,25 @@ export class Hud {
       });
       this.hitLines.push(l);
     }
+
+    // Shield charge: small cyan bar above the ammo counter's line, under the crosshair.
+    this.shieldWrap = div(this.root, {
+      position: 'absolute',
+      left: '50%',
+      top: 'calc(50% + 44px)',
+      width: '90px',
+      height: '3px',
+      marginLeft: '-45px',
+      background: 'rgba(120,220,255,0.18)',
+      display: 'none',
+      filter: SHADOW,
+    });
+    this.shieldFill = div(this.shieldWrap, {
+      width: '100%',
+      height: '100%',
+      background: '#6fe6ff',
+      transformOrigin: 'left center',
+    });
 
     // Reload bar under crosshair.
     this.reloadWrap = div(this.root, {
@@ -277,6 +299,18 @@ export class Hud {
       this.lastName = weaponName;
       this.ammoName.textContent = weaponName;
     }
+  }
+
+  /** Shield charge 0..1 (null hides); broken = red, pulsing. */
+  setShield(fraction: number | null, broken: boolean): void {
+    const id = fraction === null ? '' : `${fraction.toFixed(2)}|${broken}`;
+    if (id === this.lastShield) return;
+    this.lastShield = id;
+    this.shieldWrap.style.display = fraction === null ? 'none' : 'block';
+    if (fraction === null) return;
+    this.shieldFill.style.transform = `scaleX(${Math.max(0, Math.min(1, fraction))})`;
+    this.shieldFill.style.background = broken ? '#ff3b3b' : fraction < 0.35 ? '#ff9f1a' : '#6fe6ff';
+    this.shieldWrap.className = broken ? 'neon-hud-pulse' : '';
   }
 
   /** Reload progress bar; null hides it. */

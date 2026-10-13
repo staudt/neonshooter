@@ -1,5 +1,6 @@
 import {
   DirectionalLight,
+  Euler,
   FogExp2,
   HemisphereLight,
   PerspectiveCamera,
@@ -18,7 +19,16 @@ import { debug, getFps, mountStats, statsFrame } from './dev/stats';
 import { defineTunables, mountTuningPanel } from './dev/tuning';
 import { updateCorruptionUniforms } from './fx/corruption';
 import { Embers } from './fx/embers';
+import { Gore } from './fx/gore';
 import { RenderPipeline } from './render/pipeline';
+import {
+  applyShaderDetail,
+  initialAutoQuality,
+  QualityGovernor,
+  TIER_NAMES,
+  type Quality,
+  type Tier,
+} from './render/quality';
 import { GameWorld } from './game/session';
 import type { StageEvents } from './game/stage';
 import { CameraRig, type CameraPose } from './player/camera';
@@ -27,6 +37,7 @@ import { DebugFly } from './player/debugFly';
 import { HEALTH, PlayerHealth } from './player/health';
 import { SETTINGS } from './settings';
 import { COMBAT_SMOKE_SCRIPT, SMOKE_SCRIPT, STATION_SMOKE_SCRIPT } from './test/smokeScript';
+import { showStageClear } from './ui/stageClear';
 import { toast } from './ui/toast';
 import { Combat } from './weapons/combat';
 import { Backdrop, backdropOptionsFor } from './world/backdrop';
@@ -40,11 +51,13 @@ const params = new URLSearchParams(location.search);
 const smoke = params.get('test') === 'smoke';
 /** `?shot=x,y,z,yawDeg,pitchDeg`: fixed free camera, no input/HUD — for scripts/shots.mjs stills. */
 const shot = params.get('shot')?.split(',').map(Number) ?? null;
-const mapName = params.get('map') ?? 'station_slice';
+const mapName = params.get('map') ?? 'stage1';
+const STAGE_TITLES: Record<string, string> = { stage1: 'STAGE 1 · DESCENT' };
 
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 // Smoke runs on SwiftShader (CPU): half resolution keeps it fast enough; screenshots stay readable.
-renderer.setPixelRatio(smoke ? 0.5 : Math.min(devicePixelRatio, 2));
+const basePixelRatio = smoke ? 0.5 : Math.min(devicePixelRatio, 2);
+renderer.setPixelRatio(basePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = SRGBColorSpace;
 renderer.autoClear = false;
@@ -56,7 +69,7 @@ document.body.appendChild(renderer.domElement);
 // Ember Noir two-light rule: cold human fill vs a red key from the hell-spire side.
 const LIGHT = defineTunables(
   'look: lighting',
-  { fill: 0.45, key: 1.3, env: 0.2, fogDensity: 0.016, vmEnv: 0.35 },
+  { fill: 0.7, key: 1.3, env: 0.2, fogDensity: 0.016, vmEnv: 0.35 },
   {
     fill: [0, 3, 0.01],
     key: [0, 5, 0.01],
@@ -121,7 +134,7 @@ const NO_INPUT: InputState = { down: new Set(), pressed: new Set(), released: ne
 
 // --- stage events → feedback ------------------------------------------------
 let slowmoT = 0;
-const stats = { encounters: 0, kills: 0, playerHits: 0, enemyShots: 0, deaths: 0 };
+const stats = { encounters: 0, kills: 0, playerHits: 0, blocked: 0, enemyShots: 0, deaths: 0 };
 const stageEvents: StageEvents = {
   onEncounterStart() {
     stats.encounters++;
@@ -135,9 +148,16 @@ const stageEvents: StageEvents = {
     toast('CHECKPOINT');
   },
   onStageEnd(seconds) {
-    const m = Math.floor(seconds / 60);
-    const s = (seconds % 60).toFixed(1).padStart(4, '0');
-    toast(`STAGE CLEAR  ${m}:${s}`);
+    if (smoke || shot) return;
+    showStageClear({
+      title: STAGE_TITLES[mapName] ?? mapName.toUpperCase(),
+      seconds,
+      kills: stats.kills,
+      deaths: stats.deaths,
+      shots: combat.shotsFired,
+      hits: combat.hits,
+      blocked: stats.blocked,
+    });
   },
 };
 
@@ -150,6 +170,9 @@ const health = new PlayerHealth();
 const rig = new CameraRig();
 const fly = new DebugFly();
 const combat = new Combat(scene);
+const gore = new Gore();
+scene.add(gore.root);
+combat.gore = gore;
 pipeline = new RenderPipeline(
   renderer,
   {
@@ -159,6 +182,38 @@ pipeline = new RenderPipeline(
   },
   { lowQuality: smoke },
 );
+
+// --- graphics quality: auto governor (default) or manual (settings / ?quality=1..3) ---------------
+const urlQuality = Number(params.get('quality') ?? 0);
+const governor = new QualityGovernor(initialAutoQuality(renderer));
+let applied: Quality | null = null;
+/** What quality should be in effect right now. Tests/stills always render at full quality. */
+function wantedQuality(): Quality {
+  if (smoke || shot) return { tier: 3, scale: 1 };
+  const manual = urlQuality || SETTINGS.quality;
+  if (manual) return { tier: Math.min(3, Math.max(1, manual)) as Tier, scale: SETTINGS.renderScale };
+  return governor.q;
+}
+function applyQuality(q: Quality) {
+  if (applied && applied.tier === q.tier && applied.scale === q.scale) return;
+  applied = { ...q };
+  pipeline.tier = q.tier;
+  renderer.setPixelRatio(basePixelRatio * q.scale);
+  pipeline.setSize(innerWidth, innerHeight);
+  applyShaderDetail([scene, backdrop.scene, combat.viewmodel.scene], q.tier === 1 ? 1 : 4);
+}
+function updateQuality(frameDt: number) {
+  const auto = !(smoke || shot || urlQuality || SETTINGS.quality);
+  if (auto && !noclip) {
+    const lowered = governor.frame(frameDt);
+    if (lowered)
+      toast(
+        `GRAPHICS → ${TIER_NAMES[lowered.tier].toUpperCase()} ${Math.round(lowered.scale * 100)}% (low frame rate)\nsettings › quality to override`,
+      );
+  }
+  applyQuality(wantedQuality());
+  debug('gfx', `${TIER_NAMES[applied!.tier]} ${Math.round(applied!.scale * 100)}%${auto ? ' auto' : ''}`);
+}
 
 /** Backdrop, environment reflections, key light and fog for the loaded level (load + hot reload). */
 function setupAtmosphere() {
@@ -207,15 +262,19 @@ if (shot) {
 let shotFrames = 0;
 /** &track=<m>: shot camera follows the nearest enemy from the player's side at that distance. */
 const shotTrack = shot ? Number(params.get('track') ?? 0) : 0;
+const shotTrackKind = params.get('trackKind');
 function trackNearestEnemy(dist: number) {
   let best: { position: Vector3 } | null = null;
   let bestD = Infinity;
   for (const e of world.enemies.list) {
+    if (shotTrackKind && e.kind !== shotTrackKind) continue;
     const d = e.position.distanceTo(player.position);
     if (d < bestD) [best, bestD] = [e, d];
   }
   if (!best) return;
   const target = best.position.clone();
+  if (shotTrackKind === 'possessed') target.y += 1.2;
+  else if (shotTrackKind === 'hound') target.y += 0.6;
   const from = player.position.clone().setY(player.position.y + 1.6).sub(target).normalize();
   fly.position.copy(target).addScaledVector(from, dist).add(new Vector3(0.6, 0.35, 0));
   fly.prevPosition.copy(fly.position);
@@ -278,26 +337,61 @@ const loop = new FixedLoop(1 / SIM_HZ, {
 
     health.step(dt);
     const result = world.step(dt, player, eyeNow, !health.dead);
-    for (const p of result.enemies.fired) {
+    for (const f of result.enemies.fired) {
       stats.enemyShots++;
-      playAt('pistol_shot', p, 0.9, 0.62);
+      if (f.kind === 'grunt') playAt('pistol_shot', f.position, 0.9, 0.62);
+      else playAt('fireball', f.position, 0.9, 0.9 + Math.random() * 0.2);
     }
-    for (const p of result.enemies.charging) playAt('headshot', p, 0.35, 0.45);
+    for (const c of result.enemies.charging) {
+      if (c.kind === 'drone') playAt('demon_screech', c.position, 0.7, 0.9 + Math.random() * 0.2);
+      else if (c.kind === 'possessed') playAt('possessed_shriek', c.position, 0.9, 0.85 + Math.random() * 0.3);
+      else if (c.kind === 'hound') playAt('hound_snarl', c.position, 1, 0.9 + Math.random() * 0.2);
+      else playAt('headshot', c.position, 0.35, 0.45);
+    }
+    for (const a of result.enemies.alerts)
+      if (a.kind !== 'grunt') playAt('demon_growl', a.position, 0.8, a.kind === 'hound' ? 1.3 : 0.8 + Math.random() * 0.3);
     for (const d of result.enemies.deaths) {
       stats.kills++;
       playAt('kill', d.position, 1.2, 0.7);
-      playAt('impact_metal', d.position, 1, 0.6);
-      combat.impacts.spawn(d.position, new Vector3(0, 1, 0), 'target', new Vector3(0, -1, 0));
-    }
-    for (const hit of result.impacts) {
-      if (hit.hitPlayer) {
-        stats.playerHits++;
-        if (!shot && health.damage(hit.damage, hit.from, player.position)) stats.deaths++;
-        sfx.play('land', { volume: 0.7, pitch: 1.4 });
-        rig.hurt(hit.from.clone().sub(player.position), yaw);
+      if (d.kind === 'grunt') {
+        playAt('impact_metal', d.position, 1, 0.6);
+        combat.impacts.spawn(d.position, new Vector3(0, 1, 0), 'target', new Vector3(0, -1, 0));
       } else {
+        playAt('demon_death', d.position, 1, d.kind === 'hound' ? 1.25 : d.kind === 'drone' ? 0.75 : 1);
+        playAt('gore_splat', d.position, 1);
+        gore.burst(d.position, world.colliders, d.size);
+      }
+    }
+    const viewDir = new Vector3(0, 0, -1).applyEuler(new Euler(pitch, yaw, 0, 'YXZ'));
+    /** Damage to the player from `from` (shield first); returns true when something got through. */
+    const hurtPlayer = (hit: { point: Vector3; normal: Vector3; damage: number; from: Vector3 }) => {
+      stats.playerHits++;
+      const dmg = combat.tryBlock(hit, eyeNow, viewDir);
+      if (dmg <= 0) {
+        stats.blocked++;
+        return false;
+      }
+      if (!shot && health.damage(dmg, hit.from, player.position)) stats.deaths++;
+      sfx.play('land', { volume: 0.7, pitch: 1.4 });
+      rig.hurt(hit.from.clone().sub(player.position), yaw);
+      return true;
+    };
+    for (const hit of result.impacts) {
+      if (hit.hitPlayer) hurtPlayer(hit);
+      else {
         combat.impacts.spawn(hit.point, hit.normal, 'target', hit.normal.clone().negate());
-        playAt('impact_concrete', hit.point, 0.4, 1.3);
+        playAt('fire_impact', hit.point, 0.5, 0.9 + Math.random() * 0.2);
+      }
+    }
+    for (const a of result.enemies.attacks) {
+      const toAttacker = a.from.clone().sub(eyeNow).normalize();
+      const through = hurtPlayer({ point: eyeNow, normal: toAttacker, damage: a.damage, from: a.from });
+      sfx.play(through ? 'melee_hit' : 'shield_block', { volume: 0.9, pitch: 0.8 });
+      if (a.knock) {
+        // the shield takes most of the shove too
+        const k = through ? 1 : 0.35;
+        player.velocity.x += a.knock.x * k;
+        player.velocity.z += a.knock.z * k;
       }
     }
     for (const dir of health.hitsThisStep) {
@@ -352,7 +446,11 @@ const loop = new FixedLoop(1 / SIM_HZ, {
       camera.fov = fov;
       camera.updateProjectionMatrix();
     }
-    world.enemies.updateDebris(frameDt * loop.timeScale);
+    world.enemies.updateDebris(frameDt * loop.timeScale, {
+      trail: (p) => gore.trail(p),
+      land: (p) => gore.land(p, world.colliders),
+    });
+    gore.update(frameDt * loop.timeScale);
     combat.hud.setDamageVignette(health.dead ? 1 : Math.max(0, 1 - health.fraction / 0.7));
 
     debug('state', noclip ? 'noclip' : player.state);
@@ -381,6 +479,7 @@ const loop = new FixedLoop(1 / SIM_HZ, {
     if (showVm) combat.render(frameDt, camera, player, look, yaw);
     pipeline.showViewmodel = showVm;
     pipeline.damage = health.dead ? 1 : Math.max(0, 1 - health.fraction / 0.7);
+    updateQuality(frameDt);
     pipeline.render(frameDt);
     statsFrame(frameDt);
     if (smoke) reportSmoke(frameDt);
@@ -415,6 +514,7 @@ onMapChanged(async (name) => {
   try {
     const next = await GameWorld.create(await fetchMapSource(name), stageEvents);
     world.dispose();
+    gore.clear();
     world = next;
     world.addTo(scene);
     setupAtmosphere();
@@ -461,6 +561,8 @@ function reportSmoke(frameDt: number) {
           encounterStarted: stats.encounters > 0,
           enemiesSpawned: maxEnemies >= 3,
           playerFired: combat.shotsFired > 3,
+          shielded: combat.shieldRaises > 0,
+          meleed: combat.melees > 0,
         }
       : mapName === 'arena_test'
       ? {
@@ -497,7 +599,7 @@ function reportSmoke(frameDt: number) {
     if (mapName === 'arena_test') {
       fly.position.set(0, 14, -20);
       pitch = -0.6;
-    } else if (mapName === 'station_slice') {
+    } else if (mapName === 'station_slice' || mapName === 'stage1') {
       // near-end corner of the hall, looking down the platform toward the open side
       fly.position.set(-11, 7.5, -18);
       pitch = -0.28;

@@ -17,6 +17,10 @@ export const SETTINGS = defineTunables(
      */
     adsRelative: false,
     fov: 90,
+    /** Graphics: 0 = auto (steps down when the frame rate is low), 1 low (no post), 2 medium, 3 high. */
+    quality: 0,
+    /** Resolution multiplier when quality is set manually (auto picks its own). */
+    renderScale: 1,
     invertY: false,
     sprintToggle: true,
     crouchToggle: true,
@@ -26,6 +30,8 @@ export const SETTINGS = defineTunables(
     sensitivity: [0.1, 10, 0.05],
     adsSensitivity: [0.2, 2, 0.01],
     fov: [60, 120, 1],
+    quality: [0, 3, 1],
+    renderScale: [0.5, 1, 0.05],
     volume: [0, 1, 0.01],
   },
 );

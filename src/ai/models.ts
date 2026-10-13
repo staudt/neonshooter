@@ -31,7 +31,10 @@ export interface RobotMaterials {
 /** Hit volumes in the model root's local space. */
 export interface HitVolumes {
   body: { center: Vector3; radius: number; halfHeight: number };
+  /** Weak point (counts as 'head'). */
   core: { center: Vector3; radius: number };
+  /** Extra body spheres for shapes a vertical capsule fits badly. */
+  extra?: { center: Vector3; radius: number }[];
 }
 
 export interface GruntModel {
@@ -77,7 +80,7 @@ function makeMats(): RobotMaterials {
 
 // ---- shared geometry cache ----
 const geoCache = new Map<string, BufferGeometry>();
-function geo<T extends BufferGeometry>(key: string, make: () => T): T {
+export function geo<T extends BufferGeometry>(key: string, make: () => T): T {
   let g = geoCache.get(key);
   if (!g) {
     g = make();
@@ -86,7 +89,7 @@ function geo<T extends BufferGeometry>(key: string, make: () => T): T {
   return g as T;
 }
 
-function box(w: number, h: number, d: number, x: number, y: number, z: number, m: Material) {
+export function box(w: number, h: number, d: number, x: number, y: number, z: number, m: Material) {
   const mesh = new Mesh(
     geo(`box${w},${h},${d}`, () => new BoxGeometry(w, h, d)),
     m,
@@ -96,7 +99,7 @@ function box(w: number, h: number, d: number, x: number, y: number, z: number, m
 }
 
 /** Cylinder along Y. */
-function cylY(rTop: number, rBot: number, h: number, x: number, y: number, z: number, m: Material) {
+export function cylY(rTop: number, rBot: number, h: number, x: number, y: number, z: number, m: Material) {
   const mesh = new Mesh(
     geo(`cy${rTop},${rBot},${h}`, () => new CylinderGeometry(rTop, rBot, h, 12)),
     m,
@@ -113,7 +116,7 @@ function cylZ(r: number, len: number, x: number, y: number, z: number, m: Materi
 }
 
 /** Cone along +Y (tip up), base centered at its middle. */
-function cone(r: number, h: number, x: number, y: number, z: number, m: Material) {
+export function cone(r: number, h: number, x: number, y: number, z: number, m: Material) {
   const mesh = new Mesh(
     geo(`co${r},${h}`, () => new ConeGeometry(r, h, 6)),
     m,
@@ -122,7 +125,7 @@ function cone(r: number, h: number, x: number, y: number, z: number, m: Material
   return mesh;
 }
 
-function ball(r: number, x: number, y: number, z: number, m: Material) {
+export function ball(r: number, x: number, y: number, z: number, m: Material) {
   const mesh = new Mesh(
     geo(`sp${r}`, () => new SphereGeometry(r, 16, 12)),
     m,

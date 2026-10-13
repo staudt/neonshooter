@@ -48,5 +48,11 @@ export const STATION_SMOKE_SCRIPT: ScriptStep[] = [
   { t: 2.4, down: ['forward'], look: [110, -25] },
   { t: 2.9, down: ['fire', 'ads'] },
   { t: 4.2, down: ['right'] },
-  { t: 4.8 },
+  { t: 4.8, down: ['shield'] }, // block with the shield
+  { t: 5.7 },
+  { t: 5.8, down: ['weapon2'] }, // pistol + knife
+  { t: 5.85 },
+  { t: 6.5, down: ['melee'] },
+  { t: 6.55 },
+  { t: 7.2 },
 ];
