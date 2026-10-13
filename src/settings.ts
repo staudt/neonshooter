@@ -9,10 +9,13 @@ export const SETTINGS = defineTunables(
   {
     /** Source-engine style: radians per pixel = sensitivity * 0.022°. */
     sensitivity: 2.5,
-    /** Extra multiplier on mouse speed while aiming (MW "ADS sensitivity multiplier"). */
-    adsSensitivity: 0.85,
-    /** Scale ADS sensitivity by the zoom so 360° distance on screen stays consistent (MW "relative"). */
-    adsRelative: true,
+    /** Multiplier on mouse speed while aiming (MW "ADS sensitivity multiplier"). Default: a slight cut. */
+    adsSensitivity: 0.9,
+    /**
+     * Also scale ADS sensitivity by the zoom so on-screen speed stays consistent (MW "relative").
+     * Off by default: stacked with the multiplier it cut AR aim speed ~37%, which felt sluggish.
+     */
+    adsRelative: false,
     fov: 90,
     invertY: false,
     sprintToggle: true,

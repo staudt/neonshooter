@@ -86,16 +86,23 @@ public/assets/            CC0 glb + audio
   sounds, light screen shake, crosshair bloom.
 - Viewmodel rendered in a second pass after N8AO so it isn't occluded or AO'd by the world.
 
-**Enemies**
+**Enemies (art pivot 2026-10-13: demons replace robots)**
 
-- Grunt: bipedal or hover robot built from primitives, glowing core weak point. On navmesh,
-  picks positions with LOS within a distance band, strafes, fires telegraphed bursts
-  (eye flash → bolts with imperfect lead).
-- Drone: flying, steering + raycast avoidance, swarms and flanks, low HP.
-- Later: shield heavy (front-armored), turret, sniper with laser.
+All enemies share one *corruption shader* (`src/fx/corruption.ts`): near-black skin, fresnel rim, glowing red
+cracks from 3D noise (no UVs), glowing eyes, and a chest **sigil = weak point** (hit part `'head'`, like the old
+core). It hides low-poly/mismatched sources and makes them read as one set in fog.
+
+- **Flying demon** (replaces the drone; keeps its orbit/avoid/telegraph AI): procedural skull mass + jaw +
+  code-animated tentacles (sine chains). Floats, so no rig.
+- **Caster** (replaces the grunt; keeps navmesh repositioning + charge telegraph): CC0 rigged humanoid, hand
+  ignites → fireball volley.
+- **Possessed** (corrupted human): melee rusher — charge, lunge, telegraphed swipe you can slide out of.
+  CC0 humanoid + code-built spikes/horns, additive bone offsets (hunch, broken neck), noise head-twitch.
+- **Hound**: CC0 quadruped, procedural leap pounce (ballistic root motion + one pose).
+- Later: big demons from Quaternius monster packs; fallback AI image-to-3D + auto-rig (shader hides roughness).
 - Perception: view cone + LOS raycast, alerts propagate to nearby squad, hears gunfire.
-- Death: dissolve shader with emissive edge + spark burst; last enemy of an encounter →
-  0.6 s slow-mo.
+- Death: graphic — blood mist, raycast splatter decals, flesh gibs (death-debris system), growing pools, fixed
+  decal budget; last enemy of an encounter → 0.6 s slow-mo.
 
 **Level pipeline (TrenchBroom)**
 
@@ -106,14 +113,32 @@ public/assets/            CC0 glb + audio
   `neon_magenta`, `clip` (invisible collider), `trigger` (not rendered).
 - Save in TrenchBroom → Vite HMR → level rebuilt in-browser in <1 s.
 
-**Look (neon brutalism)**
+**Look: "Ember Noir"** (art pivot 2026-10-13)
 
-- Materials: MeshStandard with procedural triplanar grit/panel-line shader, no UV work.
-  Emissive strip materials driven by texture name.
-- Lighting: PMREM RoomEnvironment for soft fill + one shadowed directional light + few point
-  lights; AgX tonemapping.
-- Post: N8AO (biggest single win) → viewmodel pass → bloom → SMAA → vignette; chromatic
-  aberration + desaturation on damage; height fog via shader chunk.
+The concept art is photoreal; what sells it is cheap: palette, silhouettes, depth layers, signage, wet light.
+
+1. **Two-light rule.** Cold human light (fluorescent white, sodium, teal ads) vs **hell red** (emissive veins,
+   embers, sky). Everything else is desaturated concrete/rust. Enemies are the reddest things on screen.
+   Deeper into a stage = redder.
+2. **Silhouette over detail.** The corruption shader (above) on every enemy.
+3. **Depth layers.** Playable space = Quake brushwork. Beyond the railings: a non-colliding procedural
+   backdrop (`src/world/backdrop.ts`: instanced towers + window-grid shader + ad billboards, hell-spire +
+   sky ring shader, layered fog, drifting flyer lights), enabled per map by worldspawn keys.
+4. **Text is free worldbuilding.** `info_sign` entities → canvas-rendered metro signs, Korvex ads, graffiti.
+
+| Asset | Method |
+| --- | --- |
+| Architecture, stairs, pillars, trains | TrenchBroom brushes + reusable groups |
+| Surfaces | Procedural triplanar layers (grime, rust, panel lines, wet puddle mask → low roughness), optional CC0 PBR sets (ambientCG / Poly Haven) per palette entry |
+| Cables, pipes, railings | Code-generated point entities (later) |
+| Clutter | Kenney / Quaternius CC0 packs |
+| Signs / ads / graffiti | `info_sign` → CanvasTexture decal |
+| Skyline, spire, sky | `backdrop.ts`, procedural + shaders |
+| Enemies | see Enemies |
+| Guns | floating viewmodel; Quaternius guns later |
+
+- Post: N8AO → viewmodel pass → bloom → grade (AgX) → vignette + grain; chromatic aberration on damage;
+  height fog. Ember/ash GPU particles. Fixed lights only (no runtime add/remove).
 
 ## Dev workflow: memory, agents, hooks (set up in milestone 1)
 
@@ -168,7 +193,9 @@ anything is handed to you:
    all feedback FX, synthesized placeholder sounds → then swap to CC0 models/sounds.
 5. **Enemies & loop** — navmesh, Grunt + Drone, projectiles, player health regen, damage
    indicators, death → checkpoint respawn, encounter triggers.
-6. **Look pass** — materials, lighting, post stack, dissolve/slow-mo, decals polish.
+6. **Look pass / art pivot** — post stack, Ember Noir materials, backdrop, signs, corruption shader,
+   flying demon, fireballs, on the `station_slice` look-slice map.
+   6b. **Demons** — rigged-enemy pipeline, caster, Possessed, Hound, graphic gore.
 7. **First stage** — one 5–8 min level with 3–4 encounters, stage-clear screen + time.
 
 ## Assets you'll need to grab (CC0 / royalty-free; downloads aren't scriptable)
@@ -176,6 +203,9 @@ anything is handed to you:
 - TrenchBroom (AUR `trenchbroom-bin` or AppImage).
 - Quaternius _Ultimate Guns_ (or Kenney _Blaster Kit_) → `public/assets/guns/`.
 - Kenney _Sci-Fi Sounds_ + _Impact Sounds_; optional Sonniss GDC bundle for real gun layers.
+- Art pivot (milestone 6b): Quaternius rigged humanoid + animation library and an animated quadruped
+  (wolf/dog) → `public/assets/enemies/`; optional CC0 PBR sets (ambientCG / Poly Haven, 1K: concrete,
+  rusted metal, grate, tiles) → `public/assets/textures/<name>/`.
   Until then everything runs on procedural placeholders, so no milestone blocks on assets.
 
 ## Verification

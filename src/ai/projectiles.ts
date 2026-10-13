@@ -141,6 +141,9 @@ export class Projectiles {
       }
       bolt.pos.copy(next);
       bolt.mesh.position.copy(next);
+      // flame flicker
+      const flame = bolt.mesh.children[1];
+      if (flame) flame.scale.setScalar(1 + 0.18 * Math.sin(bolt.life * 57 + i) + 0.08 * Math.sin(bolt.life * 131));
     }
     return impacts;
   }

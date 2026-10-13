@@ -46,6 +46,8 @@ const kvLines = (props: Props) =>
     .join('\n');
 
 export class MapBuilder {
+  /** Extra worldspawn keys (backdrop, fog, ...). */
+  worldProps: Props = {};
   worldBrushes: string[] = [];
   entities: string[] = [];
   /** where brushes currently go (swapped inside brushEntity) */
@@ -152,10 +154,11 @@ export class MapBuilder {
   }
 
   toString() {
+    const extra = Object.keys(this.worldProps).length ? `${kvLines(this.worldProps)}\n` : '';
     return `{
 "classname" "worldspawn"
 "mapversion" "220"
-${this.worldBrushes.join('\n')}
+${extra}${this.worldBrushes.join('\n')}
 }
 ${this.entities.join('\n')}
 `;

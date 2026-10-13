@@ -2,11 +2,11 @@ import { Vector3 } from 'three';
 import { defineTunables } from '../dev/tuning';
 import { depenetrate, raycast } from '../player/collision';
 import { approachAngle, Enemy, yawToward, type AIContext } from './enemy';
-import { buildDrone, type DroneModel } from './models';
+import { animateFlyer, buildDrone, type DroneModel } from './models';
 
 export const DRONE = defineTunables('enemy: drone', {
-  /** Model + hit volume scale (bigger = easier to hit). */
-  scale: 2,
+  /** Model + hit volume scale (bigger = easier to hit). 2.4 keeps the old drone's hit radius. */
+  scale: 2.4,
   health: 45,
   speed: 7,
   accel: 4,
@@ -26,8 +26,9 @@ export const DRONE = defineTunables('enemy: drone', {
 });
 
 /**
- * Flying flanker. Orbits the player at range and height, steering around walls with a few
- * raycasts, and fires quick single bolts after a short eye-flash telegraph.
+ * Flying flanker (the "Maw" flying demon). Orbits the player at range and height, steering around
+ * walls with a few raycasts, and spits single fireballs after a telegraph: eye + mouth flare while
+ * the jaw opens.
  */
 export class Drone extends Enemy {
   readonly kind = 'drone';
@@ -41,7 +42,8 @@ export class Drone extends Enemy {
   private yaw = 0;
   private cooldown = 1 + Math.random();
   private charge = -1;
-  private spin = 0;
+  private animT = Math.random() * 10;
+  private readonly animPhase = Math.random() * 6.28;
   private retargetT = 0;
 
   constructor(pos: Vector3, yaw: number, encounter: string, wave: number) {
@@ -116,8 +118,6 @@ export class Drone extends Enemy {
     const fwd = new Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     this.model.body.rotation.z = -this.vel.dot(right) * 0.06;
     this.model.body.rotation.x = -this.vel.dot(fwd) * 0.05;
-    this.spin += dt * 40;
-    for (const r of this.model.rotors) r.rotation.y = this.spin;
 
     // --- attack
     let glowK = 1;
@@ -140,6 +140,11 @@ export class Drone extends Enemy {
       }
     }
     this.mats.glow.emissiveIntensity = 3 * glowK;
+    // tentacles trail with forward speed; jaw gapes during the charge; slow hover bob
+    this.animT += dt;
+    const open = this.charge >= 0 ? 1 - Math.max(0, this.charge) / DRONE.chargeTime : 0;
+    animateFlyer(this.model, this.animT, this.animPhase, Math.min(1, Math.max(0, this.vel.dot(fwd) / DRONE.speed)), open);
+    this.model.body.position.y = Math.sin(this.animT * 1.8 + this.animPhase) * 0.04;
   }
 
   private fire(ctx: AIContext) {

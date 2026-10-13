@@ -48,20 +48,21 @@ describe('enemy models', () => {
     expect(a.core.material).toBe(a.mats.glow);
   });
 
-  it('drone is built with 4 rotors and eye hit volume', () => {
+  it('flying demon has 4 tentacles, a jaw and an eye hit volume', () => {
     const d = buildDrone();
-    expect(d.rotors).toHaveLength(4);
-    expect(meshes(d.root).length).toBeLessThanOrEqual(40);
+    expect(d.tentacles).toHaveLength(4);
+    for (const chain of d.tentacles) expect(chain.length).toBeGreaterThanOrEqual(4);
+    expect(meshes(d.root).length).toBeLessThanOrEqual(60);
     expect(d.hit.core.center.distanceTo(d.eye.position)).toBeLessThan(0.05);
     const w = new Box3().setFromObject(d.root).getSize(new Vector3());
-    expect(w.x).toBeGreaterThan(0.6);
-    expect(w.x).toBeLessThan(1.0);
+    expect(w.x).toBeGreaterThan(0.4);
+    expect(w.x).toBeLessThan(0.8);
   });
 
   it('bolt and debris', () => {
     const b = buildBolt();
     const ms = meshes(b);
-    expect(ms).toHaveLength(2);
+    expect(ms).toHaveLength(3);
     for (const m of ms)
       expect((m.material as { blending: number }).blending).toBe(AdditiveBlending);
     const g = buildGrunt();

@@ -1,14 +1,19 @@
 # NEON — browser stage-clear FPS
 
 Halo-style "walk in, clear it, retry from checkpoint" shooter with MW-style movement and gunfeel,
-in three.js + TypeScript. **Playability first**; minimal manual modeling; stylized look from cheap
+in three.js + TypeScript. Setting: a dystopian transit megacity overrun by demons and corrupted
+humans (Doom-like), levels in the Quake/old-Doom spirit — tactical yet fast area clearing, non-boxy, not open-world. **Playability first**; minimal manual modeling; stylized look from cheap
 effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section before starting a milestone.
 
 ## Decisions (keep current; append to the log below when one changes)
 
-- Look: **neon brutalism** — white/grey concrete geometry, heavy AO (N8AO), emissive strips + bloom, fog.
-- Enemies: **procedural robots/drones** built from primitives in code (no rigging); glowing core = weak point.
-- Enemy fire: **visible, dodgeable projectiles**.
+- Look: **Ember Noir** — desaturated concrete/rust brutalism; *two-light rule*: cold human light (fluorescent,
+  sodium, teal ads) vs **hell red** (emissive veins, embers, sky). Enemies are the reddest things on screen.
+  Depth from a procedural skyline backdrop + fog; canvas signage/ads/graffiti as worldbuilding. AO + bloom.
+- Enemies: **demons + corrupted humans**. One shared *corruption shader* (near-black skin, rim light, glowing
+  cracks, chest sigil = weak point) unifies all sources: CC0 rigged packs (Quaternius) + code-built horror bits,
+  procedural fliers. No manual modeling. Robots are retired.
+- Enemy fire: **visible, dodgeable projectiles** (fireballs). Gore: **graphic** (blood decals, gibs) with a fixed budget.
 - Maps: **TrenchBroom** `.map` files → custom parser → meshes + BVH; Vite HMR reloads the level.
 - Movement v1: walk/crouch/jump, sprint + tac-sprint, slide + slide-cancel, mantle. (No prone/lean/dive.)
 - Weapons v1: AR (full-auto) + pistol (semi), data-driven. Floating viewmodel, no arms.
@@ -35,6 +40,12 @@ effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section
 - 2026-10-13 (playtest 3): drones 2× size (`DRONE.scale`, hit volumes scale with the model), drone bolts 18 m/s;
   slide snappier: boost 12, ends at 5 m/s (≈0.7 s, ≈5.7 m) and pops straight back into a sprint while forward is
   held (crouch only if released or no headroom) — the old crawl-out felt like it killed momentum.
+- 2026-10-13: **Art pivot** (concept: ruined metro platform, demon hounds, red hell-spire over a cyber skyline):
+  look → Ember Noir; enemies → demons (flying demon replaces drone, fireball caster replaces grunt, plus
+  Possessed melee rusher + Hound); CC0 rigged packs + corruption shader (not AI-3D, not pure procedural);
+  graphic gore; look slice (`maps/station_slice.map`) first. Plan: docs/PLAN.md "Look" / "Enemies".
+- 2026-10-13: ADS sensitivity default = flat 0.9 (≈10% slower), FOV-relative scaling **off** by default (it stacked
+  to a ~37% cut on the AR). Tone mapping ACES (AgX bleached hell reds pink).
 
 ## Conventions
 
@@ -60,10 +71,15 @@ effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section
   arena combat), runs the scripts in `src/test/smokeScript.ts`; fails on errors or any false
   `checks` in main's smoke report. Screenshots: `test-results/smoke-fp.png` (ADS + firing), `smoke-reload.png` (mid reload) and
   `test-results/smoke.png` (fixed overview). Look at them after visual changes.
+- `npm run shots` — full-res look stills (`?shot=x,y,z,yaw,pitch`, free camera, no HUD; `&enc=x,y,z` parks the
+  player in a trigger so enemies spawn, `&track=m` follows the nearest enemy) → `test-results/look-*.png`.
+  `SHOT=<name>`, `SHOT_MAP=<map>`, `TUNE='{"look: post":{...}}'` + `SUFFIX=-x` for A/B. Use it for look work
+  (smoke renders at half res on SwiftShader and is for correctness). ~45–60 s per still.
 - `npm run build` (`BASE_PATH=/neonshooter/` for the Pages layout)
 - Deploy: every push to `main` runs `.github/workflows/pages.yml` (typecheck + tests + build) and publishes to
   https://staudt.github.io/neonshooter/ — default map there is `arena_test`; start screen links switch maps.
-- `npm run textures` — regenerate TrenchBroom PNGs from `src/world/palette.ts`; `npm run gen:course` — regenerate test map
+- `npm run textures` — regenerate TrenchBroom PNGs from `src/world/palette.ts`; `npm run gen:course` / `gen:arena` /
+  `gen:station` — regenerate the generated maps
 - `npm run tb:install` — link the TrenchBroom game config. Level authoring guide: [docs/LEVELS.md](docs/LEVELS.md)
 
 ## Workflow: agents & hooks
@@ -90,7 +106,8 @@ effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section
 - [x] 3. Movement (capsule collision, state machine, camera feel) + headless sim tests — needs a hands-on tuning pass
 - [x] 4. Weapons (AR + pistol, hitscan, recoil, ADS, reload, FX, placeholder audio) — needs a hands-on feel pass
 - [x] 5. Enemies & loop (navmesh, Grunt + Drone, projectiles, health regen, checkpoints, encounters) — needs a combat feel pass
-- [ ] 6. Look pass (materials, lighting, post stack, dissolve, slow-mo)
+- [ ] 6. Look pass / art pivot (post stack, materials, backdrop, signs, corruption shader, flying demon, fireballs)
+- [ ] 6b. Demons (rigged-enemy pipeline, caster, Possessed rusher, Hound, graphic gore)
 - [ ] 7. First stage (5–8 min, 3–4 encounters, stage-clear screen)
 
 ## Map pipeline (src/world/)
@@ -159,6 +176,28 @@ Maps are served by the `neon-maps` Vite plugin (vite.config.ts), which also emit
 - Maps: `maps/arena_test.map` (`npm run gen:arena`, `scripts/gen-arena.ts` via `scripts/mapgen.ts` MapBuilder) is
   the combat test stage. Play it with `?map=arena_test`.
 
+## Look (src/render/, src/world/materials.ts, backdrop.ts, signs.ts, src/fx/corruption.ts, embers.ts)
+
+- `render/pipeline.ts`: `RenderPipeline` (postprocessing composer): backdrop pass (own scene + camera, near 5 m /
+  far 9 km) → world pass (depth-only clear, `ignoreBackground`) → N8AO → viewmodel pass (depth cleared) → bloom +
+  hue/sat + contrast + vignette + tone map (**ACES** default; `POST.toneMapper`, AgX bleaches reds pink) → CA (damage)
+  + grain → SMAA. Tunables "look: post". Renderer tone mapping is off (the effect does it).
+- Lighting (main.ts, "look: lighting"): cold hemisphere fill + a red **key** DirectionalLight from `spire_angle` with
+  a **static shadow map** (`shadowMap.autoUpdate = false`, `needsUpdate` on level load) so red only enters through
+  openings; FogExp2; env map = PMREM of the backdrop scene (wet floors reflect the burning sky).
+- `world/materials.ts`: palette `style` → `onBeforeCompile` world-space procedural layer (formwork concrete, puddles,
+  tiles, panels/rust, grate, hazard dots, hell cracks) + bump; shared uniforms via `updateSurfaceUniforms(time)`;
+  `NOISE_GLSL` is shared by every procedural shader. Tunables "look: surfaces".
+- `world/backdrop.ts`: sky dome (gradient, clouds, burning ring around the spire), ~900 instanced towers (window
+  grid shader, neon edges, haze), rails, spire cones, lower-city ground, billboards (`adTexture`), traffic +
+  blink lights (GPU-animated points). Deterministic PRNG. `backdropOptionsFor(worldProps, bounds)`.
+- `world/signs.ts`: `info_sign` → CanvasTexture planes (skipped headless). `fx/embers.ts`: camera-wrapped GPU embers.
+- `fx/corruption.ts`: `corruptionMaterial()` — the demon skin (object-space veins, rim, pulse, charred skin);
+  per instance (hit flash writes `emissive`); `updateCorruptionUniforms(time)` per frame. Tunables "look: corruption".
+- Enemy art: `ai/models.ts` `buildDrone()` = flying demon "Maw" (skull, jaw = telegraph, cyclops eye = weak point,
+  ribs, tentacles via `animateFlyer`); `buildBolt()` = HDR additive fireball (flickered in `projectiles.ts`). The
+  grunt is still the robot placeholder until the rigged-enemy pipeline (milestone 6b).
+
 ## Controls
 
 WASD move · Mouse look · Space jump/mantle · Shift sprint (again = tac sprint) · C / Ctrl crouch (while sprinting = slide;
@@ -166,7 +205,6 @@ during slide = cancel) · LMB fire · RMB ADS · R reload · Q swap · 1/2 weapo
 
 ## Status notes
 
-- Movers (`func_door`) render but don't collide yet (static BVH only) — milestone 5.
 - Subagents defined in `.claude/agents/` load at session start; in the session that created them, use
   `general-purpose` with a `model` override instead.
 - Assets the user still needs to download (not scriptable): TrenchBroom, Quaternius Ultimate Guns / Kenney Blaster Kit,

@@ -33,3 +33,20 @@ export const COMBAT_SMOKE_SCRIPT: ScriptStep[] = [
   { t: 6.4, down: ['back'] },
   { t: 7.0 },
 ];
+
+/**
+ * `?test=smoke&map=station_slice`: sprint + slide out of the maintenance tunnel into the station
+ * hall (starts the encounter), turn toward the open side (skyline) and fire at the fliers.
+ */
+export const STATION_SMOKE_SCRIPT: ScriptStep[] = [
+  { t: 0 },
+  { t: 0.2, down: ['forward'] },
+  { t: 0.4, down: ['forward', 'sprint'] },
+  { t: 0.45, down: ['forward'] },
+  { t: 1.3, down: ['forward', 'crouch'] }, // slide
+  { t: 1.35, down: ['forward'] },
+  { t: 2.4, down: ['forward'], look: [110, -25] },
+  { t: 2.9, down: ['fire', 'ads'] },
+  { t: 4.2, down: ['right'] },
+  { t: 4.8 },
+];

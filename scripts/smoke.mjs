@@ -5,7 +5,7 @@ import { createServer } from 'vite';
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const TIMEOUT_MS = 45_000;
+const TIMEOUT_MS = 90_000;
 const MIN_FRAMES = 20;
 const dir = process.env.SMOKE_DIR ?? 'test-results';
 
@@ -13,6 +13,7 @@ const dir = process.env.SMOKE_DIR ?? 'test-results';
 const RUNS = [
   { map: 'test_course', shots: [[2.75, 'smoke-fp'], [3.55, 'smoke-reload']], overview: 'smoke' },
   { map: 'arena_test', shots: [[4.6, 'smoke-arena-fp']], overview: 'smoke-arena' },
+  { map: 'station_slice', shots: [[2.2, 'smoke-station-tunnel'], [3.6, 'smoke-station-fp']], overview: 'smoke-station' },
 ];
 const only = process.env.SMOKE_MAP;
 

@@ -13,7 +13,9 @@
     "textures": "node scripts/gen-textures.ts",
     "tb:install": "scripts/install-trenchbroom.sh",
     "gen:course": "node scripts/gen-test-course.ts",
-    "gen:arena": "node scripts/gen-arena.ts"
+    "gen:arena": "node scripts/gen-arena.ts",
+    "shots": "node scripts/shots.mjs",
+    "gen:station": "node scripts/gen-station.ts"
   },
   "type": "module",
   "private": "true",

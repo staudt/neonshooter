@@ -1,4 +1,5 @@
 import { Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { corruptionMaterial } from '../fx/corruption';
 import { raycast, type Colliders } from '../player/collision';
 import type { LevelEntity } from '../world/level';
 import { Drone } from './drone';
@@ -23,6 +24,8 @@ const debrisMaterial = new MeshStandardMaterial({
   roughness: 0.5,
   metalness: 0.3,
 });
+/** Demon chunks: corruption skin, veins still glowing (gore pass will add blood). */
+const fleshMaterial = corruptionMaterial({ color: 0x2a0d0a, veins: 1, scale: 14 });
 
 export interface EnemyStepResult {
   /** Positions of enemies that died this step (for FX/audio). */
@@ -110,7 +113,8 @@ export class Enemies {
       if (!e.dead) continue;
       const center = e.position.clone().setY(e.position.y + (e.kind === 'grunt' ? 1.1 : 0));
       result.deaths.push({ position: center, kind: e.kind, encounter: e.encounter });
-      this.explode(center, ctx.colliders, e.kind === 'grunt' ? 14 : 7);
+      if (e.kind === 'grunt') this.explode(center, ctx.colliders, 14, debrisMaterial);
+      else this.explode(center, ctx.colliders, 10, fleshMaterial);
       e.dispose({ nav: this.nav });
       e.root.removeFromParent();
       this.list.splice(i, 1);
@@ -118,11 +122,11 @@ export class Enemies {
     return result;
   }
 
-  /** Death: the robot bursts into hull chunks that tumble, bounce once, and shrink away. */
-  private explode(center: Vector3, colliders: Colliders, count: number) {
+  /** Death: the body bursts into chunks that tumble, bounce once, and shrink away. */
+  private explode(center: Vector3, colliders: Colliders, count: number, material: MeshStandardMaterial) {
     const ground = raycast(colliders, center, new Vector3(0, -1, 0), 10);
     const floor = ground ? ground.point.y : center.y - 10;
-    for (const mesh of buildDebris(count, debrisMaterial)) {
+    for (const mesh of buildDebris(count, material)) {
       mesh.position
         .copy(center)
         .add(

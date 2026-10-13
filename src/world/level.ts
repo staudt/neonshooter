@@ -1,4 +1,13 @@
-import { BufferGeometry, Float32BufferAttribute, Group, Mesh, PointLight, Vector3 } from 'three';
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Group,
+  Mesh,
+  PointLight,
+  Vector3,
+  type Material,
+  type Texture,
+} from 'three';
 import { MeshBVH } from 'three-mesh-bvh';
 import {
   angleToYaw,
@@ -10,6 +19,7 @@ import {
 import { parseMap, type MapEntity } from './mapParser';
 import { getMaterial } from './materials';
 import { paletteEntry } from './palette';
+import { buildSigns } from './signs';
 
 /** Brush entities whose brushes are plain static world geometry. */
 const WORLD_CLASSES = new Set(['worldspawn', 'func_group', 'func_detail']);
@@ -47,6 +57,8 @@ export interface LevelData {
     group: Group | null;
   }[];
   playerStart: { position: Vector3; yaw: number };
+  /** worldspawn keys (backdrop, corruption, ...). */
+  worldProps: Record<string, string>;
   warnings: string[];
 }
 
@@ -110,6 +122,7 @@ export function buildLevelData(src: string): LevelData {
   const collision = new GeometryBuilder();
   const entities: LevelEntity[] = [];
   const movers: LevelData['movers'] = [];
+  let worldProps: Record<string, string> = {};
 
   const builderFor = (map: Map<string, GeometryBuilder>, tex: string) => {
     let b = map.get(tex);
@@ -130,6 +143,7 @@ export function buildLevelData(src: string): LevelData {
         if (!paletteEntry(poly.texture)) unknownTextures.add(poly.texture);
 
     if (WORLD_CLASSES.has(classname)) {
+      if (classname === 'worldspawn') worldProps = ent.props;
       for (const b of built) {
         const allTrigger = b.polygons.every((p) => paletteEntry(p.texture)?.tool === 'trigger');
         if (allTrigger) continue;
@@ -198,6 +212,7 @@ export function buildLevelData(src: string): LevelData {
       position: start?.origin.clone() ?? new Vector3(0, 2, 0),
       yaw: start?.yaw ?? 0,
     },
+    worldProps,
     warnings,
   };
 }
@@ -246,6 +261,8 @@ export function createLevel(src: string): Level {
     root.add(light);
   }
 
+  root.add(buildSigns(data.entities));
+
   for (const w of data.warnings) console.warn(`[level] ${w}`);
 
   return {
@@ -254,7 +271,14 @@ export function createLevel(src: string): Level {
     dispose() {
       root.removeFromParent();
       root.traverse((o) => {
-        if (o instanceof Mesh) o.geometry.dispose();
+        if (!(o instanceof Mesh)) return;
+        o.geometry.dispose();
+        // per-level materials (signs); shared palette materials are cached and kept
+        const mat = o.material as Material & { map?: Texture | null };
+        if (o.parent?.name.startsWith('sign:')) {
+          mat.map?.dispose();
+          mat.dispose();
+        }
       });
       data.collision.dispose();
     },

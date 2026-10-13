@@ -1,7 +1,14 @@
 // NEON entity definitions. Keys are read by src/world/level.ts (and gameplay systems).
 // Units: map units (32 = 1 m), Z-up. "angle" is yaw in degrees, 0 = +X.
 
-@SolidClass = worldspawn : "World" []
+@SolidClass = worldspawn : "World" [
+    backdrop(choices) : "Skyline backdrop beyond the level" : "none" = [
+        "none" : "None (plain dark fog)"
+        "city" : "Burning megacity + hell-spire"
+    ]
+    corruption(float) : "Hell redness 0..1 (sky, embers)" : "0.5"
+    spire_angle(integer) : "Direction of the hell-spire (degrees, 0 = +X)" : 0
+]
 
 @BaseClass = Targetname [ targetname(target_source) : "Name" ]
 @BaseClass = Target [ target(target_destination) : "Target" ]
@@ -42,6 +49,26 @@
 @SolidClass base(Targetname) = func_door : "Sliding door / mover" [
     move(string) : "Open offset x y z (map units)" : "0 0 128"
     speed(integer) : "Speed (units per second)" : 256
+]
+
+@PointClass base(Angle) size(-4 -4 -4, 4 4 4) color(255 255 255) = info_sign :
+    "Canvas-rendered sign. Origin = center of the face (~1 unit off the wall); angle = facing (floor: text-up direction)." [
+    text(string) : "Text ('|' = new line)" : "PLATFORM 2|City Loop"
+    style(choices) : "Style" : "metro" = [
+        "metro" : "Metro wayfinding (dark panel)"
+        "metro_badge" : "Metro number badge"
+        "ad" : "Backlit Korvex ad (teal)"
+        "ad_red" : "Backlit hell propaganda (red)"
+        "graffiti" : "Spray paint (transparent)"
+        "floor" : "Floor marking (horizontal)"
+    ]
+    width(float) : "Width (m)" : "2"
+    height(float) : "Height (m)" : "0.5"
+    arrow(choices) : "Arrow (metro)" : "" = [
+        "" : "None"
+        "left" : "Left"
+        "right" : "Right"
+    ]
 ]
 
 @PointClass size(-8 -8 -8, 8 8 8) color(255 255 180) = light_point : "Point light" [
