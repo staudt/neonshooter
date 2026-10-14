@@ -13,6 +13,7 @@ import {
 } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { sfx, type SfxName } from './audio/audio';
+import { SYNTHS } from './audio/synth';
 import { BrowserInput, ScriptedInput, type InputSource, type InputState } from './core/input';
 import { FixedLoop } from './core/loop';
 import { debug, getFps, mountStats, statsFrame } from './dev/stats';
@@ -36,7 +37,7 @@ import { PlayerController } from './player/controller';
 import { DebugFly } from './player/debugFly';
 import { HEALTH, PlayerHealth } from './player/health';
 import { SETTINGS } from './settings';
-import { COMBAT_SMOKE_SCRIPT, SMOKE_SCRIPT, STATION_SMOKE_SCRIPT } from './test/smokeScript';
+import { SMOKE_RUNS } from './test/smokeScript';
 import { showStageClear } from './ui/stageClear';
 import { toast } from './ui/toast';
 import { Combat } from './weapons/combat';
@@ -52,7 +53,7 @@ const smoke = params.get('test') === 'smoke';
 /** `?shot=x,y,z,yawDeg,pitchDeg`: fixed free camera, no input/HUD — for scripts/shots.mjs stills. */
 const shot = params.get('shot')?.split(',').map(Number) ?? null;
 const mapName = params.get('map') ?? 'stage1';
-const STAGE_TITLES: Record<string, string> = { stage1: 'STAGE 1 · DESCENT' };
+const smokeRun = SMOKE_RUNS[mapName] ?? SMOKE_RUNS.default;
 
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 // Smoke runs on SwiftShader (CPU): half resolution keeps it fast enough; screenshots stay readable.
@@ -112,13 +113,7 @@ if (shot) {
   input = new ScriptedInput([{ t: 0 }]);
 } else if (smoke) {
   overlay.classList.add('hidden');
-  input = new ScriptedInput(
-    mapName === 'arena_test'
-      ? COMBAT_SMOKE_SCRIPT
-      : mapName === 'station_slice'
-        ? STATION_SMOKE_SCRIPT
-        : SMOKE_SCRIPT,
-  );
+  input = new ScriptedInput(smokeRun.script);
 } else {
   const browser = new BrowserInput(renderer.domElement, (locked) =>
     overlay.classList.toggle('hidden', locked),
@@ -147,10 +142,16 @@ const stageEvents: StageEvents = {
   onCheckpoint() {
     toast('CHECKPOINT');
   },
+  onMessage(text) {
+    toast(text.replace(/\\n/g, '\n'));
+  },
+  onSound(name, position, volume) {
+    if (name in SYNTHS) playAt(name as SfxName, position, volume);
+  },
   onStageEnd(seconds) {
     if (smoke || shot) return;
     showStageClear({
-      title: STAGE_TITLES[mapName] ?? mapName.toUpperCase(),
+      title: world.level.data.worldProps.message ?? mapName.toUpperCase(),
       seconds,
       kills: stats.kills,
       deaths: stats.deaths,
@@ -553,32 +554,17 @@ function reportSmoke(frameDt: number) {
   smokeFrames++;
   smokeTime += frameDt;
   const scripted = input as ScriptedInput;
-  const checks: Record<string, boolean> =
-    mapName === 'station_slice'
-      ? {
-          sprinted: statesSeen.has('sprint'),
-          slid: statesSeen.has('slide'),
-          encounterStarted: stats.encounters > 0,
-          enemiesSpawned: maxEnemies >= 3,
-          playerFired: combat.shotsFired > 3,
-          shielded: combat.shieldRaises > 0,
-          meleed: combat.melees > 0,
-        }
-      : mapName === 'arena_test'
-      ? {
-          encounterStarted: stats.encounters > 0,
-          enemiesSpawned: maxEnemies >= 3,
-          enemiesFired: stats.enemyShots > 0,
-          playerFired: combat.shotsFired > 3,
-        }
-      : {
-          sprinted: statesSeen.has('sprint'),
-          slid: statesSeen.has('slide'),
-          jumped: statesSeen.has('air'),
-          fastSlide: maxSpeed > 9,
-          fired: combat.shotsFired > 3,
-          reloaded: combat.reloads > 0,
-        };
+  const checks = smokeRun.checks({
+    states: statesSeen,
+    maxSpeed,
+    maxEnemies,
+    encounters: stats.encounters,
+    enemyShots: stats.enemyShots,
+    shots: combat.shotsFired,
+    reloads: combat.reloads,
+    melees: combat.melees,
+    shieldRaises: combat.shieldRaises,
+  });
   const report = {
     done: scripted.done,
     t: scripted.elapsed,
@@ -595,19 +581,10 @@ function reportSmoke(frameDt: number) {
   if (scripted.done && !noclip) {
     // Fixed vantage for the screenshot so visual changes are comparable run to run.
     noclip = true;
-    yaw = 0;
-    if (mapName === 'arena_test') {
-      fly.position.set(0, 14, -20);
-      pitch = -0.6;
-    } else if (mapName === 'station_slice' || mapName === 'stage1') {
-      // near-end corner of the hall, looking down the platform toward the open side
-      fly.position.set(-11, 7.5, -18);
-      pitch = -0.28;
-      yaw = -0.55;
-    } else {
-      fly.position.set(0, 16, 16);
-      pitch = -0.5;
-    }
+    const v = smokeRun.overview;
+    fly.position.set(...v.pos);
+    yaw = v.yaw;
+    pitch = v.pitch;
     fly.prevPosition.copy(fly.position);
   }
   (window as unknown as { __smoke: unknown }).__smoke = report;

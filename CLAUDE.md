@@ -52,6 +52,10 @@ effects. Full design: [docs/PLAN.md](docs/PLAN.md) — read the relevant section
   0.35 s before firing + slower ADS-in for 1 s; own HP (150), regen after 2 s, breaks → 4 s cooldown. Flyers 2×
   (`DRONE.scale` 4.8); enemy fire slower (drone 15, grunt 23 m/s). **Graphics quality**: auto tiers (high/medium/
   low = no post) + render scale; starts low on software renderers, steps down when < 45 fps, remembered.
+- 2026-10-14: **Maps are data, the game is generic** (QuakeC-style split): no per-map code in the game — scripted
+  moments are entities wired by `targetname`/`target` (`game/io.ts` `EntityIO`). Workflow: the user blocks out maps in
+  TrenchBroom; Claude adds lights/signs/encounters/wiring/cover as entities in the `.map`. Per-map smoke config lives
+  in `src/test/smokeScript.ts` (`SMOKE_RUNS`), not the game. Stage title = worldspawn `message`.
 
 ## Conventions
 
@@ -172,6 +176,10 @@ Maps are served by the `neon-maps` Vite plugin (vite.config.ts), which also emit
 - `game/session.ts`: `GameWorld` = everything per loaded level (level, doors, enemies + navmesh, stage, dummies);
   rebuilt on load/hot reload. `world.colliders` = [static, dynamic doors] — pass it (not the static collider) to
   anything that collides; the array is mutated in place as doors move.
+- `game/io.ts`: `EntityIO` — `on(name, fn)` registers what "use" does, `fire(target, by, delay)` uses every named
+  target (comma/space separated). Stage registers doors, checkpoints, `target_sound`, ambush enemies (`targetname`, no
+  encounter), relays and named triggers; GameWorld registers lights (toggle; `style` flicker/pulse animated by
+  intensity). **New behaviour = a new entity class (FGD + handler), never a map check.** Tests: `tests/io.test.ts`.
 - `game/stage.ts`: `Stage` — encounters from `trigger_encounter` (enter → wave 0 alerted; wave cleared → next after
   1.4 s; last cleared → doors in `target` open + slow-mo + toast), `trigger_checkpoint`→`info_checkpoint`, free doors
   (not gated by an encounter) open on approach, `trigger_stage_end` only when all cleared. `resetToCheckpoint()` on

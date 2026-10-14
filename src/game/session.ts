@@ -24,6 +24,24 @@ export class GameWorld {
   ) {
     this.root.add(level.root, enemies.root);
     for (const d of dummies) this.root.add(d.root);
+    // named lights are I/O targets: used = toggled (intensity only; lights are never added/removed)
+    for (const l of level.lights) stage.io.on(l.name, () => (l.on = !l.on));
+  }
+
+  private lightT = 0;
+
+  /** light_point `style`: flicker (dying tube) / pulse (hellish breathing); off = 0. */
+  private updateLights(dt: number) {
+    this.lightT += dt;
+    const t = this.lightT;
+    for (const l of this.level.lights) {
+      let k = l.on ? 1 : 0;
+      if (k && l.style === 'flicker') {
+        const n = Math.sin(t * 13.7 + l.seed) + Math.sin(t * 31.1 + l.seed * 2) + Math.sin(t * 5.3 + l.seed * 3);
+        k = n > 1.4 ? 0.05 : n > 0.9 ? 0.5 : 1;
+      } else if (k && l.style === 'pulse') k = 0.55 + 0.45 * Math.sin(t * 2.4 + l.seed);
+      l.light.intensity = l.base * k;
+    }
   }
 
   static async create(src: string, events: StageEvents): Promise<GameWorld> {
@@ -65,6 +83,7 @@ export class GameWorld {
     alive: boolean,
   ): { impacts: BoltImpact[]; enemies: ReturnType<Enemies['step']> } {
     this.doors.update(dt);
+    this.updateLights(dt);
     for (const d of this.dummies) d.update(dt);
     const enemies = this.enemies.step(dt, {
       colliders: this.colliders,

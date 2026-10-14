@@ -7,6 +7,7 @@
 "backdrop" "city"
 "corruption" "0.65"
 "spire_angle" "35"
+"message" "STAGE 1 · DESCENT"
 {
 ( 112 -32 -32 ) ( 112 480 -32 ) ( -112 480 -32 ) concrete_dark [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
 ( -112 480 0 ) ( 112 480 0 ) ( 112 -32 0 ) concrete_floor [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
@@ -2757,6 +2758,7 @@
 "_color" "0.85 0.92 1"
 "intensity" "14"
 "range" "12"
+"style" "flicker"
 }
 {
 "classname" "info_sign"
@@ -3003,6 +3005,27 @@
 ( -192 2240 0 ) ( -64 2240 0 ) ( -64 2240 96 ) trigger [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
 ( -64 2112 96 ) ( -64 2112 0 ) ( -192 2112 0 ) trigger [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
 }
+}
+{
+"classname" "trigger_once"
+"target" "market_growl"
+"message" "Something is moving down there…"
+"delay" "0.4"
+{
+( -64 2272 0 ) ( -64 2320 0 ) ( -192 2320 0 ) trigger [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -192 2320 96 ) ( -64 2320 96 ) ( -64 2272 96 ) trigger [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -192 2272 96 ) ( -192 2272 0 ) ( -192 2320 0 ) trigger [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -64 2320 0 ) ( -64 2272 0 ) ( -64 2272 96 ) trigger [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -192 2320 0 ) ( -64 2320 0 ) ( -64 2320 96 ) trigger [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -64 2272 96 ) ( -64 2272 0 ) ( -192 2272 0 ) trigger [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+}
+{
+"classname" "target_sound"
+"origin" "0 3520 -128"
+"targetname" "market_growl"
+"sound" "demon_growl"
+"volume" "1.6"
 }
 {
 "classname" "info_checkpoint"
@@ -3273,6 +3296,38 @@
 }
 }
 {
+"classname" "trigger_once"
+"target" "ramp_ambush"
+"delay" "0.3"
+{
+( 96 4320 -128 ) ( 96 4384 -128 ) ( -96 4384 -128 ) trigger [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -96 4384 32 ) ( 96 4384 32 ) ( 96 4320 32 ) trigger [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
+( -96 4320 32 ) ( -96 4320 -128 ) ( -96 4384 -128 ) trigger [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( 96 4384 -128 ) ( 96 4320 -128 ) ( 96 4320 32 ) trigger [ 0 1 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( -96 4384 -128 ) ( 96 4384 -128 ) ( 96 4384 32 ) trigger [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+( 96 4320 32 ) ( 96 4320 -128 ) ( -96 4320 -128 ) trigger [ 1 0 0 0 ] [ 0 0 -1 0 ] 0 1 1
+}
+}
+{
+"classname" "enemy_possessed"
+"origin" "-128 3936 -192"
+"targetname" "ramp_ambush"
+"angle" "90"
+}
+{
+"classname" "enemy_possessed"
+"origin" "160 3968 -192"
+"targetname" "ramp_ambush"
+"angle" "90"
+}
+{
+"classname" "target_sound"
+"origin" "0 3968 -160"
+"targetname" "ramp_ambush"
+"sound" "possessed_shriek"
+"volume" "1.4"
+}
+{
 "classname" "info_checkpoint"
 "origin" "0 4166.4 -191.68"
 "targetname" "cp_ramp"
@@ -3446,6 +3501,14 @@
 "_color" "1 0.12 0.03"
 "intensity" "40"
 "range" "26"
+"style" "pulse"
+}
+{
+"classname" "target_sound"
+"origin" "0 6848 192"
+"targetname" "plaza_scream"
+"sound" "demon_death"
+"volume" "1.8"
 }
 {
 "classname" "trigger_checkpoint"
@@ -3469,6 +3532,8 @@
 "classname" "trigger_encounter"
 "targetname" "enc_plaza"
 "target" "door_breach"
+"start_target" "plaza_scream"
+"message" "IT KNOWS YOU ARE HERE"
 {
 ( 576 6272 0 ) ( 576 6400 0 ) ( -576 6400 0 ) trigger [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1
 ( -576 6400 128 ) ( 576 6400 128 ) ( 576 6272 128 ) trigger [ 1 0 0 0 ] [ 0 -1 0 0 ] 0 1 1

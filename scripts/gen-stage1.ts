@@ -9,7 +9,7 @@ import { kit } from './kit.ts';
 
 const m = new MapBuilder();
 // the spire stands ahead and to the right: its red light rakes the hall's open side and the bridge
-m.worldProps = { backdrop: 'city', corruption: 0.65, spire_angle: 35 };
+m.worldProps = { backdrop: 'city', corruption: 0.65, spire_angle: 35, message: 'STAGE 1 · DESCENT' };
 const {
   bx,
   tiledWall,
@@ -38,7 +38,7 @@ bx([-3.5, 3.5], [3.6, 4.6], [1, -15]);
 for (let z = -2; z > -15; z -= 4) bx([-0.7, 0.7], [3.5, 3.6], [z + 0.08, z - 0.08], 'neon_white');
 bx([1.9, 2.5], [2.9, 3.3], [0, -15], 'rust');
 bx([-2.5, -2.2], [0, 0.12], [0, -15], 'hazard');
-light([0, 3.2, -8], '0.85 0.92 1', 14, 12);
+m.point('light_point', [0, 3.2, -8], { _color: '0.85 0.92 1', intensity: 14, range: 12, style: 'flicker' });
 sign([-2.47, 1.9, -8], 0, {
   text: 'HUMANITY|STILL|BLEEDS',
   style: 'graffiti',
@@ -183,6 +183,9 @@ stairsZ([-6, -2], -72, 0, -0.25, 1 / 3, 24, -7);
 bx([-7, -6], [-7, 4], [-72, -80]);
 bx([-2, -1], [-7, 4], [-72, -80]);
 trigger('trigger_checkpoint', { target: 'cp_corridor' }, [-6, -2], [0, 3], [-66, -70]);
+// top of the stairs: something waits below
+trigger('trigger_once', { target: 'market_growl', message: 'Something is moving down there…', delay: '0.4' }, [-6, -2], [0, 3], [-71, -72.5]);
+m.point('target_sound', [0, -4, -110], { targetname: 'market_growl', sound: 'demon_growl', volume: 1.6 });
 m.point('info_checkpoint', [-4, 0.01, -67], { targetname: 'cp_corridor', angle: 90 });
 light([-4, 2.2, -68], '1 0.15 0.05', 12, 9);
 
@@ -320,6 +323,11 @@ bx([-3, 3], [Y - 3, Y], [-131, -143], 'concrete_dark');
 bx([-4, -3], [Y - 1, 3], [-129, -143], 'concrete_dark');
 bx([3, 4], [Y - 1, 3], [-129, -143], 'concrete_dark');
 trigger('trigger_checkpoint', { target: 'cp_ramp' }, [-3, 3], [Y, Y + 3], [-129.4, -131]);
+// halfway up the ramp: stragglers burst out of the market behind you (ambush, not an encounter)
+trigger('trigger_once', { target: 'ramp_ambush', delay: '0.3' }, [-3, 3], [-4, 1], [-135, -137]);
+m.point('enemy_possessed', [-4, Y, -123], { targetname: 'ramp_ambush', angle: 90 });
+m.point('enemy_possessed', [5, Y, -124], { targetname: 'ramp_ambush', angle: 90 });
+m.point('target_sound', [0, Y + 1, -124], { targetname: 'ramp_ambush', sound: 'possessed_shriek', volume: 1.4 });
 m.point('info_checkpoint', [0, Y + 0.01, -130.2], { targetname: 'cp_ramp', angle: 90 });
 
 // =================================================================================================
@@ -411,13 +419,19 @@ sign([-17.97, 3, -215], 0, { text: 'REPENT', style: 'graffiti', width: 3.2, heig
 sign([17.97, 2.6, -205], 180, { text: 'IT SEES|US', style: 'graffiti', width: 2.4, height: 1.6 });
 light([-10, 4, -205], '1 0.25 0.1', 40, 24);
 light([10, 4, -226], '1 0.25 0.1', 40, 24);
-light([0, 9.5, -214], '1 0.12 0.03', 40, 26);
+m.point('light_point', [0, 9.5, -214], { _color: '1 0.12 0.03', intensity: 40, range: 26, style: 'pulse' });
 
+m.point('target_sound', [0, 6, -214], { targetname: 'plaza_scream', sound: 'demon_death', volume: 1.8 });
 trigger('trigger_checkpoint', { target: 'cp_plaza' }, [-3, 3], [0, 3], [-193.2, -195]);
 m.point('info_checkpoint', [0, 0.01, -194], { targetname: 'cp_plaza', angle: 90 });
 trigger(
   'trigger_encounter',
-  { targetname: 'enc_plaza', target: 'door_breach' },
+  {
+    targetname: 'enc_plaza',
+    target: 'door_breach',
+    start_target: 'plaza_scream',
+    message: 'IT KNOWS YOU ARE HERE',
+  },
   [-18, 18],
   [0, 4],
   [-196, -200],

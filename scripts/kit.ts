@@ -56,11 +56,20 @@ export function kit(m: MapBuilder) {
   const trigger = (cls: string, props: Record<string, string>, x: R, y: R, z: R) =>
     m.brushEntity(cls, props, () => bx(x, y, z, 'trigger'));
 
-  /** Sliding door (func_door) filling x/y/z; opens by `move` (meters, game space) */
-  function door(name: string, x: R, y: R, z: R, rise: number, tex = 'rust', stripe = 'neon_red') {
+  /** Sliding door (func_door) filling x/y/z, rising by `rise` m when opened. `extra` = more keys ({ toggle: 1 }). */
+  function door(
+    name: string,
+    x: R,
+    y: R,
+    z: R,
+    rise: number,
+    tex = 'rust',
+    stripe = 'neon_red',
+    extra: Record<string, string | number> = {},
+  ) {
     m.brushEntity(
       'func_door',
-      { targetname: name, move: `0 0 ${Math.round(rise * 32)}`, speed: 160 },
+      { targetname: name, move: `0 0 ${Math.round(rise * 32)}`, speed: 160, ...extra },
       () => {
         bx(x, y, z, tex);
         const zs = sorted(z);

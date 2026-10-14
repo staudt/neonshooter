@@ -56,3 +56,64 @@ export const STATION_SMOKE_SCRIPT: ScriptStep[] = [
   { t: 6.55 },
   { t: 7.2 },
 ];
+
+/** What main tracks during a smoke run (input to each map's checks). */
+export interface SmokeStats {
+  states: ReadonlySet<string>;
+  maxSpeed: number;
+  maxEnemies: number;
+  encounters: number;
+  enemyShots: number;
+  shots: number;
+  reloads: number;
+  melees: number;
+  shieldRaises: number;
+}
+
+export interface SmokeRun {
+  script: ScriptStep[];
+  /** Each must be true or scripts/smoke.mjs fails. */
+  checks(s: SmokeStats): Record<string, boolean>;
+  /** Fixed free-camera vantage for the overview screenshot (yaw/pitch radians). */
+  overview: { pos: [number, number, number]; yaw: number; pitch: number };
+}
+
+const movementChecks = (s: SmokeStats) => ({
+  sprinted: s.states.has('sprint'),
+  slid: s.states.has('slide'),
+  jumped: s.states.has('air'),
+  fastSlide: s.maxSpeed > 9,
+  fired: s.shots > 3,
+  reloaded: s.reloads > 0,
+});
+
+const HALL_VANTAGE = { pos: [-11, 7.5, -18] as [number, number, number], yaw: -0.55, pitch: -0.28 };
+
+/** Test config per map (the game itself has no per-map code). Unlisted maps use `default`. */
+export const SMOKE_RUNS: Record<string, SmokeRun> = {
+  default: { script: SMOKE_SCRIPT, checks: movementChecks, overview: { pos: [0, 16, 16], yaw: 0, pitch: -0.5 } },
+  arena_test: {
+    script: COMBAT_SMOKE_SCRIPT,
+    checks: (s) => ({
+      encounterStarted: s.encounters > 0,
+      enemiesSpawned: s.maxEnemies >= 3,
+      enemiesFired: s.enemyShots > 0,
+      playerFired: s.shots > 3,
+    }),
+    overview: { pos: [0, 14, -20], yaw: 0, pitch: -0.6 },
+  },
+  station_slice: {
+    script: STATION_SMOKE_SCRIPT,
+    checks: (s) => ({
+      sprinted: s.states.has('sprint'),
+      slid: s.states.has('slide'),
+      encounterStarted: s.encounters > 0,
+      enemiesSpawned: s.maxEnemies >= 3,
+      playerFired: s.shots > 3,
+      shielded: s.shieldRaises > 0,
+      meleed: s.melees > 0,
+    }),
+    overview: HALL_VANTAGE,
+  },
+  stage1: { script: SMOKE_SCRIPT, checks: movementChecks, overview: HALL_VANTAGE },
+};

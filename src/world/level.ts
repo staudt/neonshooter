@@ -217,9 +217,20 @@ export function buildLevelData(src: string): LevelData {
   };
 }
 
+/** A map light_point: `targetname` (toggled by I/O), `style` (flicker | pulse), `start_off`. */
+export interface LevelLight {
+  light: PointLight;
+  name: string;
+  base: number;
+  style: string;
+  on: boolean;
+  seed: number;
+}
+
 export interface Level {
   data: LevelData;
   root: Group;
+  lights: LevelLight[];
   dispose(): void;
 }
 
@@ -247,6 +258,7 @@ export function createLevel(src: string): Level {
     mover.group = g;
   }
 
+  const lights: LevelLight[] = [];
   for (const e of data.entities) {
     if (e.classname !== 'light_point') continue;
     const [r, g, b] = (e.props._color ?? '1 1 1').split(/\s+/).map(Number);
@@ -259,6 +271,9 @@ export function createLevel(src: string): Level {
     light.color.setRGB(r, g, b);
     light.position.copy(e.origin);
     root.add(light);
+    const on = e.props.start_off !== '1';
+    lights.push({ light, name: e.props.targetname ?? '', base: light.intensity, style: e.props.style ?? '', on, seed: lights.length * 7.31 });
+    if (!on) light.intensity = 0;
   }
 
   root.add(buildSigns(data.entities));
@@ -268,6 +283,7 @@ export function createLevel(src: string): Level {
   return {
     data,
     root,
+    lights,
     dispose() {
       root.removeFromParent();
       root.traverse((o) => {

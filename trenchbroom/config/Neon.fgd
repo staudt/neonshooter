@@ -8,10 +8,15 @@
     ]
     corruption(float) : "Hell redness 0..1 (sky, embers)" : "0.5"
     spire_angle(integer) : "Direction of the hell-spire (degrees, 0 = +X)" : 0
+    message(string) : "Stage title (stage-clear screen)"
 ]
 
 @BaseClass = Targetname [ targetname(target_source) : "Name" ]
-@BaseClass = Target [ target(target_destination) : "Target" ]
+@BaseClass = Target [ target(target_destination) : "Target(s) to use (comma/space separated)" ]
+@BaseClass = Fires [
+    delay(float) : "Seconds before the targets are used" : "0"
+    message(string) : "Toast shown when it fires"
+]
 @BaseClass = Angle [ angle(integer) : "Yaw (degrees, 0 = +X)" : 0 ]
 @BaseClass = Encounter [
     encounter(string) : "Encounter name (targetname of a trigger_encounter)"
@@ -28,19 +33,49 @@
 @SolidClass base(Target) = trigger_checkpoint : "Activates the info_checkpoint it targets when the player enters" []
 
 @SolidClass base(Targetname, Target) = trigger_encounter :
-    "Starts an encounter when entered: spawns enemies whose 'encounter' key is this targetname. Doors it targets stay locked until the encounter is cleared." []
+    "Starts an encounter when entered: spawns enemies whose 'encounter' key is this targetname. Doors among its targets stay shut while it's active; all targets are used when it's cleared." [
+    start_target(target_destination) : "Used when the encounter starts"
+    message(string) : "Toast when it starts"
+]
+
+// --- Wiring (Quake-style: anything with a targetname can be used) --------------
+
+@SolidClass base(Targetname, Target, Fires) = trigger_once : "Uses its targets the first time the player enters" []
+
+@SolidClass base(Targetname, Target, Fires) = trigger_multiple : "Uses its targets whenever the player enters (re-arms after 'wait')" [
+    wait(float) : "Seconds before it can fire again" : "1"
+]
+
+@PointClass base(Targetname, Target, Fires) size(-8 -8 -8, 8 8 8) color(255 128 255) = trigger_relay : "When used: shows its message and uses its targets after 'delay' (chains, timers)" []
+
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(120 255 120) = target_sound : "When used: plays a sound here" [
+    sound(choices) : "Sound" : "demon_growl" = [
+        "demon_growl" : "Demon growl"
+        "demon_screech" : "Flyer screech"
+        "possessed_shriek" : "Possessed shriek"
+        "hound_snarl" : "Hound snarl"
+        "demon_death" : "Death scream"
+        "fire_impact" : "Fire impact"
+        "impact_metal" : "Metal clang"
+        "shield_break" : "Glass / energy shatter"
+        "gore_splat" : "Wet splat"
+    ]
+    volume(float) : "Volume" : "1"
+]
 
 @SolidClass base(Target) = trigger_stage_end : "Ends the stage when entered (all encounters must be cleared)" []
 
 // --- Enemies ----------------------------------------------------------------
 
-@PointClass base(Angle, Encounter) size(-16 -16 0, 16 16 64) color(255 60 60) = enemy_grunt : "Grunt robot (ground, projectile bursts)" []
+// Enemies: with an 'encounter' they spawn in its waves; with a 'targetname' (no encounter) they spawn
+// alerted when used (ambush); with neither they're placed at load and wait to notice the player.
+@PointClass base(Angle, Encounter, Targetname) size(-16 -16 0, 16 16 64) color(255 60 60) = enemy_grunt : "Grunt robot (ground, projectile bursts)" []
 
-@PointClass base(Angle, Encounter) size(-24 -24 -24, 24 24 24) color(255 140 0) = enemy_drone : "Flying demon (Maw): orbits, spits fireballs" []
+@PointClass base(Angle, Encounter, Targetname) size(-24 -24 -24, 24 24 24) color(255 140 0) = enemy_drone : "Flying demon (Maw): orbits, spits fireballs" []
 
-@PointClass base(Angle, Encounter) size(-14 -14 0, 14 14 58) color(220 40 20) = enemy_possessed : "Possessed (corrupted human): melee rusher — chase, wind-up, swipe" []
+@PointClass base(Angle, Encounter, Targetname) size(-14 -14 0, 14 14 58) color(220 40 20) = enemy_possessed : "Possessed (corrupted human): melee rusher — chase, wind-up, swipe" []
 
-@PointClass base(Angle, Encounter) size(-16 -16 0, 16 16 30) color(200 70 0) = enemy_hound : "Hell-hound: fast, telegraphed pounce, bites up close" []
+@PointClass base(Angle, Encounter, Targetname) size(-16 -16 0, 16 16 30) color(200 70 0) = enemy_hound : "Hell-hound: fast, telegraphed pounce, bites up close" []
 
 @PointClass base(Angle) size(-12 -12 0, 12 12 56) color(255 200 0) = target_dummy : "Shooting-range dummy (respawns)" [
     health(integer) : "Health" : 100
@@ -50,9 +85,10 @@
 
 @SolidClass = func_detail : "Detail brushes (treated as world)" []
 
-@SolidClass base(Targetname) = func_door : "Sliding door / mover" [
+@SolidClass base(Targetname) = func_door : "Sliding door / mover. Opens when used; doors nothing targets open on approach." [
     move(string) : "Open offset x y z (map units)" : "0 0 128"
     speed(integer) : "Speed (units per second)" : 256
+    toggle(choices) : "Used again closes it" : 0 = [ 0 : "No" 1 : "Yes" ]
 ]
 
 @PointClass base(Angle) size(-4 -4 -4, 4 4 4) color(255 255 255) = info_sign :
@@ -75,7 +111,9 @@
     ]
 ]
 
-@PointClass size(-8 -8 -8, 8 8 8) color(255 255 180) = light_point : "Point light" [
+@PointClass base(Targetname) size(-8 -8 -8, 8 8 8) color(255 255 180) = light_point : "Point light (used = toggled)" [
+    style(choices) : "Style" : "" = [ "" : "Steady" "flicker" : "Flicker (dying tube)" "pulse" : "Pulse (breathing)" ]
+    start_off(choices) : "Starts off" : 0 = [ 0 : "No" 1 : "Yes" ]
     _color(color1) : "Color (0-1)" : "1 1 1"
     intensity(float) : "Intensity" : 20
     range(float) : "Range (m)" : 12
